@@ -5,5 +5,6 @@ namespace CS2AssetPerformanceAuditor.Core.Findings
         public const string Version = "1.0";
         public const int MinimumPeerSampleSize = 5;
         public const double WeakLodRetentionPercent = 85d;
+        public const long HighExposureReferenceCount = 10000;
     }
 }

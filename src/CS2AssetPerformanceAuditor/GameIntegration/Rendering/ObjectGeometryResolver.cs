@@ -20,6 +20,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Rendering
                 return new RenderResolution(RenderCoverage.Unknown, diagnosticCode: "render_family_not_object_geometry");
 
             var assets = new Dictionary<RenderAssetKey, RenderAssetRecord>();
+            var runtimeAssets = new Dictionary<RenderAssetKey, RuntimeRenderAssetBinding>();
             var relations = new List<PrefabRenderRelation>();
             var meshes = objectGeometry.m_Meshes;
             if (meshes == null || meshes.Length == 0)
@@ -29,7 +30,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Rendering
             {
                 if (!(meshInfo.m_Mesh is RenderPrefab renderPrefab))
                     continue;
-                AddRenderAsset(input, renderPrefab, RenderRelationKind.DirectMesh, null, assets, relations);
+                AddRenderAsset(input, renderPrefab, RenderRelationKind.DirectMesh, null, assets, runtimeAssets, relations);
                 if (renderPrefab.components == null)
                     continue;
                 foreach (var component in renderPrefab.components)
@@ -40,22 +41,30 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Rendering
                     {
                         var lodRenderPrefab = lod.m_LodMeshes[index];
                         if (lodRenderPrefab == null) continue;
-                        AddRenderAsset(input, lodRenderPrefab, RenderRelationKind.Lod, index + 1, assets, relations);
+                        AddRenderAsset(input, lodRenderPrefab, RenderRelationKind.Lod, index + 1, assets, runtimeAssets, relations);
                     }
                 }
             }
 
             return assets.Count == 0
                 ? new RenderResolution(RenderCoverage.Unknown, diagnosticCode: "object_geometry_render_prefab_unresolved")
-                : new RenderResolution(RenderCoverage.Supported, assets.Values, relations);
+                : new RenderResolution(RenderCoverage.Supported, assets.Values, relations, runtimeAssets: runtimeAssets.Values);
         }
 
-        private static void AddRenderAsset(RenderGraphInput input, RenderPrefab renderPrefab, RenderRelationKind relationKind, int? lodLevel, IDictionary<RenderAssetKey, RenderAssetRecord> assets, ICollection<PrefabRenderRelation> relations)
+        private static void AddRenderAsset(
+            RenderGraphInput input,
+            RenderPrefab renderPrefab,
+            RenderRelationKind relationKind,
+            int? lodLevel,
+            IDictionary<RenderAssetKey, RenderAssetRecord> assets,
+            IDictionary<RenderAssetKey, RuntimeRenderAssetBinding> runtimeAssets,
+            ICollection<PrefabRenderRelation> relations)
         {
             var id = StableRenderId(renderPrefab);
             var type = renderPrefab.GetType().FullName ?? "Game.Prefabs.RenderPrefab";
             var key = new RenderAssetKey(id, type);
             if (!assets.ContainsKey(key)) assets.Add(key, new RenderAssetRecord(key, DisplayName(renderPrefab, id)));
+            if (!runtimeAssets.ContainsKey(key)) runtimeAssets.Add(key, new RuntimeRenderAssetBinding(key, renderPrefab));
             relations.Add(new PrefabRenderRelation(input.Prefab.Key, key, relationKind, lodLevel));
         }
 

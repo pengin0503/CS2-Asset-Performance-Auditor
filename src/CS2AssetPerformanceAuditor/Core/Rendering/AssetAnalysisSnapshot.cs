@@ -26,6 +26,12 @@ namespace CS2AssetPerformanceAuditor.Core.Rendering
         public GeometryObservation? Geometry { get; }
         public IReadOnlyList<SurfaceObservation> Surfaces { get; }
         public IReadOnlyList<TextureObservation> Textures { get; }
+
+        public RenderAssetAnalysisRecord WithDeepInspection(DeepInspectionObservation observation)
+        {
+            if (observation == null) throw new ArgumentNullException(nameof(observation));
+            return new RenderAssetAnalysisRecord(RenderAsset.WithDeepInspection(observation), Geometry, Surfaces, Textures);
+        }
     }
 
     public sealed class PrefabAnalysisEntry
@@ -127,5 +133,19 @@ namespace CS2AssetPerformanceAuditor.Core.Rendering
 
         public bool TryGetPrefab(PrefabKey key, out PrefabAnalysisEntry entry) => _prefabs.TryGetValue(key, out entry!);
         public bool TryGetRenderAsset(RenderAssetKey key, out RenderAssetAnalysisRecord record) => _renderAssets.TryGetValue(key, out record!);
+
+        public AssetAnalysisSnapshot WithDeepInspection(RenderAssetKey key, DeepInspectionObservation observation, long analysisGeneration)
+        {
+            if (!key.IsValid) throw new ArgumentException("A stable render-asset key is required.", nameof(key));
+            if (observation == null) throw new ArgumentNullException(nameof(observation));
+            if (analysisGeneration <= AnalysisGeneration) throw new ArgumentOutOfRangeException(nameof(analysisGeneration), "Enrichment must advance the analysis generation.");
+            if (!_renderAssets.ContainsKey(key))
+                throw new InvalidOperationException("The selected render asset is not part of this analysis snapshot.");
+
+            var updated = new List<RenderAssetAnalysisRecord>(RenderAssets.Count);
+            foreach (var record in RenderAssets)
+                updated.Add(record.RenderAsset.Key == key ? record.WithDeepInspection(observation) : record);
+            return new AssetAnalysisSnapshot(WorldGeneration, CatalogGeneration, analysisGeneration, observation.CapturedAt, Prefabs, updated);
+        }
     }
 }

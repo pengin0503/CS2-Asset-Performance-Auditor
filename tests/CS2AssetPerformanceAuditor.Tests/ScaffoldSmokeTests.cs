@@ -28,6 +28,15 @@ public sealed class ScaffoldSmokeTests
     }
 
     [Test]
+    public void CS2_systems_are_partial_for_entities_source_generation()
+    {
+        var auditSystem = ReadRepoFile("src/CS2AssetPerformanceAuditor/GameIntegration/AssetAuditSystem.cs");
+        var uiSystem = ReadRepoFile("src/CS2AssetPerformanceAuditor/UI/AssetAuditUISystem.cs");
+        Assert.That(auditSystem, Does.Contain("public sealed partial class AssetAuditSystem : GameSystemBase"));
+        Assert.That(uiSystem, Does.Contain("public sealed partial class AssetAuditUISystem : UISystemBase"));
+    }
+
+    [Test]
     public void Census_buffers_use_long_lived_allocator_for_frame_sliced_reduction()
     {
         var source = ReadRepoFile("src/CS2AssetPerformanceAuditor/GameIntegration/Census/CensusCaptureBuffers.cs");

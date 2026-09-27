@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a read-mostly Cities: Skylines II Code Mod that catalogs Prefabs, captures an explicit snapshot census of city exposure, audits render/geometry/LOD/surface/texture metadata, produces evidence-backed findings, and exposes the results through a scalable in-game UI and versioned exports.
+**Goal:** Build a read-mostly Cities: Skylines II Code Mod that catalogs Prefabs, captures a snapshot census of current-city exposure, audits render/geometry/LOD/surface/texture metadata, produces evidence-backed findings, and exposes the results through a scalable in-game UI and versioned exports.
 
-**Architecture:** Keep all CS2/ECS/AssetDatabase/Unity dependencies behind a narrow Game Integration layer. Convert runtime data into game-independent domain observations, publish scans atomically through a coordinator/store, run findings/query/export logic in pure Core code, and expose bounded result windows to a React/TypeScript UI. Phases 0–4 are one architecture but are implemented through explicit milestone gates so each phase remains reviewable and usable before the next begins.
+**Architecture:** Keep CS2/ECS/AssetDatabase/Unity types inside Game Integration. Convert runtime data into game-independent Core observations, publish scans atomically, run findings/query/export logic on Core data, and expose only bounded result windows to the React/TypeScript UI. Phases 0–4 share this architecture but have explicit milestone gates.
 
-**Tech Stack:** C# / .NET Framework 4.8 CS2 Code Mod, Unity Entities/ECS, Colossal AssetDatabase, NUnit on .NET 8 for Pure Core tests, React 18 + TypeScript + Webpack + Vitest for UI, JSON/CSV export.
+**Tech Stack:** C# / .NET Framework 4.8 CS2 Code Mod, Unity Entities/ECS, Colossal AssetDatabase, NUnit on .NET 8 for Pure Core tests, a local net48 Adapter Contract test project for game-API contracts, React 18 + TypeScript + Webpack + Vitest for UI, `DataContractJsonSerializer` for canonical JSON unless an implementation-time compatibility test proves another serializer necessary.
 
 **Spec:** `docs/superpowers/specs/2026-09-27-asset-performance-auditor-design.md`
 
@@ -14,32 +14,32 @@
 
 - Baseline game target: Cities: Skylines II `1.6.2f1`.
 - Phases 1–4 use **no Harmony dependency, Prefix, Postfix, or Transpiler**.
-- Reflection is not part of the current implementation and must not be introduced as an automatic fallback.
-- The mod is read-mostly: scanners do not mutate gameplay entities or Prefabs.
+- Reflection is not part of runtime implementation and must not be introduced as an automatic fallback. Reflection is permitted inside local Adapter Contract tests when used only to inspect public member contracts.
+- Scanners do not mutate gameplay entities or Prefabs.
 - Full-world Census and full Asset Audit are user-triggered snapshots, not always-on trackers.
 - Gameplay Prefab identity and render-resource identity remain separate.
-- `Observed`, `Derived`, `Estimated`, `NotScanned`, `NotApplicable`, `Unsupported`, and `Failed` semantics must survive through Core, UI, and JSON export.
-- Failed/cancelled scans must not replace the last successfully published snapshot.
-- A numeric zero must never substitute for `NotScanned`, `NotApplicable`, `Unsupported`, or `Failed`.
-- Static metadata must not be described as actual per-frame rendering cost or actual GPU residency.
+- `Observed`, `Derived`, `Estimated`, `NotScanned`, `NotApplicable`, `Unsupported`, and `Failed` semantics survive through Core, UI, and JSON export.
+- Failed/cancelled scans never replace the last successful published snapshot.
+- Numeric zero never substitutes for unavailable/unscanned states.
+- Static metadata is never described as actual per-frame rendering cost or actual GPU residency.
 - No global 0–100 performance score.
-- Heavy Unity object materialization is restricted to selected-asset Deep Inspection.
+- Heavy Unity object materialization is selected-asset-only Deep Inspection.
 - Shared RenderPrefab/GeometryAsset/SurfaceAsset/TextureAsset resources are deduplicated.
-- Game DLLs are local/toolchain references and are not committed to the repository.
+- Game DLLs are local/toolchain references and are not committed.
 - New game versions remain `Untested` until runtime validation marks them `Supported`.
 - Phase 5 Runtime Evidence is outside this plan.
 
 ## Review Focus
 
-1. **World changes during active work:** active capture/reduction must cancel/dispose safely, and previous-world census data must never be shown as current.
-2. **Ambiguous census classification:** an Entity carrying multiple subordinate markers must count once, and unsupported/omitted counters must remain `NotScanned`, not zero.
-3. **Shared render resources:** multiple Prefabs referencing the same render/geometry/surface/texture resource must not multiply static resource totals or collector work.
-4. **Broken/incomplete custom assets:** one bad Prefab/RenderPrefab/Texture must degrade that item/capability without aborting unrelated data collection where safe.
-5. **Deep Inspection ownership:** temporary Unity/AssetDatabase objects must be released on success, cancellation, and exception paths, while game-owned shared objects must never be destroyed by the mod.
+1. **World change during active scan:** current-world state is keyed by `WorldGeneration`; changing worlds cancels/disposes active work and invalidates the old published census.
+2. **Ambiguous census classification:** an entity with multiple subordinate markers counts once; omitted metrics are `NotScanned`, not zero.
+3. **Shared resources:** repeated Prefab references do not multiply Geometry/Surface/Texture collector work or unique-resource totals.
+4. **Broken custom asset:** one bad Prefab/RenderPrefab/Texture remains item/feature-level failure where safe and does not abort unrelated collectors.
+5. **Deep Inspection ownership:** mod-owned temporary resources are released on success/cancel/exception while game-owned shared resources are never destroyed.
 
 ---
 
-# Repository structure locked by this plan
+## Repository structure locked by this plan
 
 ```text
 CS2AssetPerformanceAuditor.sln
@@ -51,88 +51,23 @@ src/CS2AssetPerformanceAuditor/
   Mod.cs
   Setting.cs
   Core/
+    ProjectInfo.cs
     Capabilities/
-      CapabilityId.cs
-      CapabilityState.cs
-      CapabilityReport.cs
-      CompatibilityState.cs
     Observations/
-      Availability.cs
-      ObservationOrigin.cs
-      Observation.cs
     Prefabs/
-      PrefabKey.cs
-      PrefabTraits.cs
-      AssetOriginEvidence.cs
-      PrefabRecord.cs
     Census/
-      CensusCountKind.cs
-      CensusCounters.cs
-      CensusPresence.cs
-      CensusQueryProfile.cs
-      ScanOptions.cs
-      CensusEntry.cs
-      CensusSnapshot.cs
-      CensusReducer.cs
     Rendering/
-      RenderAssetKey.cs
-      RenderCoverage.cs
-      RenderRelationKind.cs
-      PrefabRenderRelation.cs
-      RenderAssetRecord.cs
-      GeometryObservation.cs
-      MeshObservation.cs
-      SubMeshObservation.cs
-      SurfaceObservation.cs
-      TextureObservation.cs
     Findings/
-      FindingStatus.cs
-      FindingBasis.cs
-      FindingCategory.cs
-      Finding.cs
-      RuleSetInfo.cs
-      FindingEngine.cs
-      PeerStatistics.cs
     Scanning/
-      ScanKind.cs
-      ScanStage.cs
-      ScanState.cs
-      ScanProgress.cs
-      ScanSession.cs
-      PublishedAuditState.cs
     Query/
-      AssetQuery.cs
-      AssetSort.cs
-      AssetPage.cs
-      AssetQueryService.cs
+    Diagnostics/
   GameIntegration/
     Capabilities/
-      CapabilityProbe.cs
     Prefabs/
-      IPrefabCatalogAccess.cs
-      PrefabCatalogAccess.cs
-      PrefabClassifier.cs
-      SourceMetadataReader.cs
     Census/
-      CensusSample.cs
-      CensusCaptureBuffers.cs
-      CensusAccess.cs
     Rendering/
-      IRenderAssetResolver.cs
-      ObjectGeometryResolver.cs
-      RenderGraphBuilder.cs
-      GeometryAssetReader.cs
-      SurfaceAssetReader.cs
-      TextureAssetReader.cs
-      DeepInspectionReader.cs
     AssetAuditSystem.cs
   Export/
-    ReportSchema.cs
-    AuditReport.cs
-    AuditReportBuilder.cs
-    AuditReportSerializer.cs
-    CsvSummaryExporter.cs
-    PrivacySanitizer.cs
   UI/
     AssetAuditUISystem.cs
     UiContracts.cs
@@ -150,36 +85,18 @@ UI/
     AssetAuditorRoot.tsx
     assetAuditor.module.scss
     components/
-      ScanStatus.tsx
-      VirtualAssetTable.tsx
-      FindingBadge.tsx
-      EvidencePanel.tsx
     tabs/
-      OverviewTab.tsx
-      AssetsTab.tsx
-      CensusTab.tsx
-      WarningsTab.tsx
-      CompareTab.tsx
-      SettingsTab.tsx
     details/
-      AssetDetails.tsx
-      RenderStructure.tsx
-      GeometryDetails.tsx
-      LodDetails.tsx
-      MaterialDetails.tsx
-      TextureDetails.tsx
     __tests__/
-      queryState.test.ts
-      scanStatus.test.tsx
-      assetTable.test.tsx
-      findings.test.tsx
-      escapeClose.test.tsx
 
 tests/CS2AssetPerformanceAuditor.Tests/
   CS2AssetPerformanceAuditor.Tests.csproj
+  ScaffoldSmokeTests.cs
   ObservationTests.cs
+  PrefabProjectionTests.cs
   CensusReducerTests.cs
   ScanSessionTests.cs
+  RenderGraphTests.cs
   GeometryMathTests.cs
   TextureFootprintTests.cs
   PeerStatisticsTests.cs
@@ -189,70 +106,69 @@ tests/CS2AssetPerformanceAuditor.Tests/
   PrivacySanitizerTests.cs
   ReportCompatibilityTests.cs
 
-docs/validation/
-  runtime-validation.md
+tests/CS2AssetPerformanceAuditor.AdapterTests/
+  CS2AssetPerformanceAuditor.AdapterTests.csproj
+  PublicApiContractTests.cs
+
+docs/validation/runtime-validation.md
+.github/workflows/core-ui-tests.yml
 ```
 
-The game project remains one assembly initially; the Pure Core test project links only game-independent source files, following the proven pattern used by the existing Runtime Profiler. If a later implementation task proves a separate Core assembly materially simpler, that requires an explicit plan amendment rather than ad-hoc restructuring.
+The game project remains one assembly initially. Pure Core tests link only game-independent files, matching the proven Runtime Profiler pattern. A separate Core assembly is not introduced unless a later approved plan amendment shows a concrete need.
 
 ---
 
-## Milestone 0 — Compatibility foundation and testable Core
+# Milestone 0 — Compatibility foundation and testable Core
 
-### Task 1: Scaffold the solution, game project, UI project, and Pure Core test project
+### Task 1: Scaffold a fully green repository baseline
 
 **Files:**
 - Create: `CS2AssetPerformanceAuditor.sln`
 - Create: `.gitignore`
+- Create: `README.md`
 - Create: `src/CS2AssetPerformanceAuditor/CS2AssetPerformanceAuditor.csproj`
 - Create: `src/CS2AssetPerformanceAuditor/Mod.cs`
+- Create: `src/CS2AssetPerformanceAuditor/Core/ProjectInfo.cs`
 - Create: `tests/CS2AssetPerformanceAuditor.Tests/CS2AssetPerformanceAuditor.Tests.csproj`
+- Create: `tests/CS2AssetPerformanceAuditor.Tests/ScaffoldSmokeTests.cs`
 - Create: `UI/package.json`
 - Create: `UI/tsconfig.json`
 - Create: `UI/webpack.config.js`
 - Create: `UI/src/index.tsx`
-- Create: `README.md`
+- Create: `UI/src/AssetAuditorRoot.tsx`
+- Create: `UI/src/__tests__/smoke.test.tsx`
 
 **Interfaces:**
-- Consumes: local `$(CSII_TOOLPATH)/Mod.props` and `Mod.targets`; no committed game DLLs.
-- Produces: buildable `CS2AssetPerformanceAuditor` net48 mod project, `CS2AssetPerformanceAuditor.Tests` net8 NUnit project, and React/TypeScript UI build/test entry points.
+- Produces: `ProjectInfo.ProductName == "CS2 Asset Performance Auditor"`, `ProjectInfo.UsesHarmony == false`, buildable net48 mod project, green net8 NUnit project, green Vitest/Webpack UI baseline.
 
-- [ ] **Step 1: Create the failing smoke tests/build expectations**
+- [ ] **Step 1: Write failing scaffold smoke tests**
 
-Add one NUnit smoke test asserting the expected root namespace is loadable from linked Core source once Task 2 adds it, and one Vitest smoke test importing the UI root module. At this step they may fail because the Core/UI root types are not present yet.
+`ScaffoldSmokeTests` asserts `ProjectInfo.ProductName` and `UsesHarmony == false`. UI smoke test renders the minimal `AssetAuditorRoot` with `renderToStaticMarkup` and asserts the product title.
 
-- [ ] **Step 2: Run the baseline commands and record the expected initial failures**
-
-Run:
+- [ ] **Step 2: Run and verify the tests fail because the production types/files do not yet exist**
 
 ```bash
 dotnet test tests/CS2AssetPerformanceAuditor.Tests/CS2AssetPerformanceAuditor.Tests.csproj
 cd UI && npm install && npm test
 ```
 
-Expected: test/build setup resolves; smoke tests fail only for the intentionally missing root/Core types, not due to malformed project configuration.
+- [ ] **Step 3: Implement the minimal scaffold**
 
-- [ ] **Step 3: Create the minimal project scaffolding**
+Game project: `TargetFramework=net48`, `LangVersion=9`, `OutputType=Library`, `RootNamespace/AssemblyName=CS2AssetPerformanceAuditor`, CS2 `Mod.props`/`Mod.targets`, required public Game/Colossal/Unity references only, no Harmony package. UI baseline: React 18, TypeScript, Webpack, Vitest, Node >=18.
 
-Use `TargetFramework=net48`, `OutputType=Library`, `RootNamespace=CS2AssetPerformanceAuditor`, `AssemblyName=CS2AssetPerformanceAuditor`, import CS2 `Mod.props`/`Mod.targets`, reference only the game/Colossal/Unity assemblies needed by the approved design, and do **not** reference `Lib.Harmony`.
-
-Use a UI toolchain compatible with the existing Runtime Profiler baseline: React 18, TypeScript, Webpack, Vitest, Node >=18.
-
-- [ ] **Step 4: Verify project configuration**
-
-Run:
+- [ ] **Step 4: Verify the task ends green**
 
 ```bash
 dotnet test tests/CS2AssetPerformanceAuditor.Tests/CS2AssetPerformanceAuditor.Tests.csproj
 cd UI && npm test && npm run build
 ```
 
-Expected: only tests that intentionally await Task 2 domain types remain failing; package/build configuration itself succeeds.
+Expected: PASS. Also run `dotnet build src/CS2AssetPerformanceAuditor/CS2AssetPerformanceAuditor.csproj -c Debug` where `CSII_TOOLPATH` is available.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add CS2AssetPerformanceAuditor.sln .gitignore README.md src tests UI
+git add -A
 git commit -m "build: scaffold asset performance auditor"
 ```
 
@@ -271,52 +187,36 @@ git commit -m "build: scaffold asset performance auditor"
 - Create: `src/CS2AssetPerformanceAuditor/Core/Prefabs/AssetOriginEvidence.cs`
 - Create: `src/CS2AssetPerformanceAuditor/Core/Prefabs/PrefabRecord.cs`
 - Create: `tests/CS2AssetPerformanceAuditor.Tests/ObservationTests.cs`
+- Create: `tests/CS2AssetPerformanceAuditor.Tests/PrefabProjectionTests.cs`
 - Modify: `tests/CS2AssetPerformanceAuditor.Tests/CS2AssetPerformanceAuditor.Tests.csproj`
 
 **Interfaces:**
-- Consumes: no game types.
-- Produces:
-  - `readonly record struct PrefabKey(string PrefabId, string PrefabType)`
-  - `sealed record Observation<T>(T? Value, Availability Availability, ObservationOrigin Origin, DateTimeOffset CapturedAt)`
-  - `sealed class CapabilityReport` with `Get(CapabilityId)` and immutable/public-read capability entries.
-  - `sealed record PrefabRecord(PrefabKey Key, string DisplayName, PrefabTraits Traits, AssetOriginEvidence Origin)`.
+- Produces: immutable `PrefabKey(string prefabId, string prefabType)`, `Observation<T>`, `CapabilityReport`, `PrefabRecord`. Implement with ordinary immutable classes/readonly structs rather than requiring C# record runtime compatibility.
 
-- [ ] **Step 1: Write failing domain-semantic tests**
+- [ ] **Step 1: Write failing tests**
 
-Tests must assert:
-- `Observation<int>` can represent `Available(0)` distinctly from `NotScanned`.
-- `Unsupported` observations do not expose a fabricated numeric value.
-- `PrefabKey` equality does not depend on runtime Entity index.
-- a capability report can represent mixed `Supported`, `Degraded`, `Unsupported`, and `Failed` capabilities.
+Assert available numeric zero differs from `NotScanned`; unsupported observations expose no fabricated value; PrefabKey ignores runtime Entity index; overlapping source evidence is preserved; Prefab traits can be combined; capability states may be mixed per feature.
 
-- [ ] **Step 2: Run the focused tests and verify failure**
-
-Run:
+- [ ] **Step 2: Run focused tests and verify failure**
 
 ```bash
-dotnet test tests/CS2AssetPerformanceAuditor.Tests/CS2AssetPerformanceAuditor.Tests.csproj --filter ObservationTests
+dotnet test tests/CS2AssetPerformanceAuditor.Tests/CS2AssetPerformanceAuditor.Tests.csproj --filter "ObservationTests|PrefabProjectionTests"
 ```
 
-Expected: FAIL because the contracts do not exist.
+- [ ] **Step 3: Implement the contracts without any Game/Unity/Colossal references**
 
-- [ ] **Step 3: Implement the domain contracts**
-
-Use enums/immutable records only; do not reference `Game`, `Unity.Entities`, `UnityEngine`, or `Colossal.*` from these files.
-
-- [ ] **Step 4: Run tests and verify pass**
-
-Run the command from Step 2.
+- [ ] **Step 4: Re-run focused tests**
 
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/CS2AssetPerformanceAuditor/Core tests/CS2AssetPerformanceAuditor.Tests
+git add src tests
 git commit -m "feat: add core observation contracts"
 ```
 
-### Task 3: Implement Census Query Profile v1 and atomic snapshot semantics in Pure Core
+### Task 3: Implement Census Query Profile v1, scan options, and world-safe atomic snapshots
 
 **Files:**
 - Create: `src/CS2AssetPerformanceAuditor/Core/Census/CensusCountKind.cs`
@@ -331,26 +231,11 @@ git commit -m "feat: add core observation contracts"
 - Create: `tests/CS2AssetPerformanceAuditor.Tests/CensusReducerTests.cs`
 
 **Interfaces:**
-- Consumes: `PrefabKey` from Task 2.
-- Produces:
-  - `const string CensusQueryProfile.V1 = "1"`
-  - `readonly record struct CensusCounters(long TopLevelObjects, long SubordinateObjects, long LiveObjectReferences, long NetworkEdges)`
-  - `sealed record CensusEntry(PrefabKey Key, CensusCounters Counters, CensusPresence Presence)`
-  - `CensusReducer.AddObject(PrefabKey key, bool isSubordinate)`
-  - `CensusReducer.AddNetworkEdge(PrefabKey key)`
-  - `CensusSnapshot BuildSnapshot(...)`
-  - `PublishedAuditState.TryPublish(CensusSnapshot workingSnapshot)` only after successful finalization.
+- Produces: `CensusQueryProfile.V1 == "1"`; `CensusCounters`; `CensusReducer.AddObject(PrefabKey,bool isSubordinate)`; `AddNetworkEdge(PrefabKey)`; `CensusSnapshot` containing `WorldGeneration`, `queryProfileVersion`, `scanOptions`, timestamp, catalog generation; `PublishedAuditState.ResetForWorld(long worldGeneration)` and publish-on-success only.
 
-- [ ] **Step 1: Write failing Query Profile v1 tests**
+- [ ] **Step 1: Write failing profile/snapshot tests**
 
-Tests must pin all Review Focus semantics owned here:
-- top-level object => `TopLevelObjects=1`, `LiveObjectReferences=1`.
-- subordinate object => `SubordinateObjects=1`, `LiveObjectReferences=1`.
-- an input already classified subordinate is added once even if its adapter flags arose from both Owner and Controller.
-- network edge affects `NetworkEdges` only.
-- disabled subordinate collection serializes the affected observation as `NotScanned`, never numeric zero.
-- failed/cancelled working snapshot does not replace the prior published snapshot.
-- a current snapshot is tied to `queryProfileVersion` and `scanOptions`.
+Assert top-level/subordinate/live/network semantics; one logical subordinate input contributes once; omitted subordinate collection is `NotScanned`; cancelled/failed scan does not replace old snapshot; `ResetForWorld(2)` invalidates a snapshot from world generation 1; query profile and scan options are carried in the snapshot.
 
 - [ ] **Step 2: Run and verify failure**
 
@@ -358,24 +243,22 @@ Tests must pin all Review Focus semantics owned here:
 dotnet test tests/CS2AssetPerformanceAuditor.Tests/CS2AssetPerformanceAuditor.Tests.csproj --filter CensusReducerTests
 ```
 
-Expected: FAIL.
+- [ ] **Step 3: Implement reducer and immutable snapshot publication**
 
-- [ ] **Step 3: Implement the reducer and immutable snapshot contracts**
+For supported object metrics enforce `LiveObjectReferences = TopLevelObjects + SubordinateObjects`.
 
-The reducer accepts already classified logical samples; exact ECS classification remains a Game Integration concern. Enforce the invariant `LiveObjectReferences = TopLevelObjects + SubordinateObjects` for supported object metrics.
-
-- [ ] **Step 4: Run the focused tests**
+- [ ] **Step 4: Re-run tests**
 
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/CS2AssetPerformanceAuditor/Core/Census src/CS2AssetPerformanceAuditor/Core/Scanning tests/CS2AssetPerformanceAuditor.Tests/CensusReducerTests.cs
+git add src tests
 git commit -m "feat: define census query profile v1"
 ```
 
-### Task 4: Implement the scan state machine, progress contract, and cancellation publication rules
+### Task 4: Implement the game-independent scan lifecycle
 
 **Files:**
 - Create: `src/CS2AssetPerformanceAuditor/Core/Scanning/ScanKind.cs`
@@ -386,97 +269,73 @@ git commit -m "feat: define census query profile v1"
 - Create: `tests/CS2AssetPerformanceAuditor.Tests/ScanSessionTests.cs`
 
 **Interfaces:**
-- Consumes: `PublishedAuditState`, `ScanOptions`.
-- Produces:
-  - `ScanSession Start(ScanKind kind, ScanOptions options)`
-  - `void RequestCancellation()`
-  - state transitions through `Preparing`, capture/reduction stages, `Finalizing`, `Completed`, `Cancelled`, `Failed`.
-  - `ScanProgress` with either exact `(completed,total)` or indeterminate stage state, never fabricated percentage.
+- Produces: `ScanSession.Start(...)`, `RequestCancellation()`, validated stage transitions, exact or indeterminate `ScanProgress`, publication permitted only from successful Finalizing/Completed path.
 
 - [ ] **Step 1: Write failing state-machine tests**
 
-Cover:
-- valid Phase 1 transition order,
-- invalid backwards transitions rejected,
-- cancel during managed reduction becomes `Cancelled` before publication,
-- cancel during scheduled capture records cancellation request but does not pretend the underlying job was force-killed,
-- only `Completed` permits publish,
-- progress without total is indeterminate.
+Cover valid Phase 1 order, rejected backwards transitions, cancel during managed reduction, cancellation-requested state during scheduled capture, publication only on success, and indeterminate progress when total is unknown.
 
 - [ ] **Step 2: Run focused tests and verify failure**
 
-```bash
-dotnet test tests/CS2AssetPerformanceAuditor.Tests/CS2AssetPerformanceAuditor.Tests.csproj --filter ScanSessionTests
-```
+- [ ] **Step 3: Implement the state machine with no JobHandle/Game dependency**
 
-- [ ] **Step 3: Implement the minimal state machine**
-
-Keep it game-independent; Game `JobHandle` ownership stays in the adapter/coordinator.
-
-- [ ] **Step 4: Run tests and verify pass**
+- [ ] **Step 4: Run tests**
 
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/CS2AssetPerformanceAuditor/Core/Scanning tests/CS2AssetPerformanceAuditor.Tests/ScanSessionTests.cs
+git add src tests
 git commit -m "feat: add scan lifecycle state machine"
 ```
 
-### Task 5: Add Phase 0 Game Integration capability probing and mod/system registration
+### Task 5: Add public-API contract tests, capability probing, and idle game systems
 
 **Files:**
+- Create: `tests/CS2AssetPerformanceAuditor.AdapterTests/CS2AssetPerformanceAuditor.AdapterTests.csproj`
+- Create: `tests/CS2AssetPerformanceAuditor.AdapterTests/PublicApiContractTests.cs`
 - Create: `src/CS2AssetPerformanceAuditor/GameIntegration/Capabilities/CapabilityProbe.cs`
 - Create: `src/CS2AssetPerformanceAuditor/GameIntegration/AssetAuditSystem.cs`
 - Create: `src/CS2AssetPerformanceAuditor/UI/AssetAuditUISystem.cs`
-- Modify: `src/CS2AssetPerformanceAuditor/Mod.cs`
 - Create: `src/CS2AssetPerformanceAuditor/Setting.cs`
+- Modify: `src/CS2AssetPerformanceAuditor/Mod.cs`
 
 **Interfaces:**
-- Consumes: Core capability/scan contracts.
-- Produces:
-  - `CapabilityReport CapabilityProbe.Probe(World world)`
-  - `AssetAuditSystem` as the sole heavy-work coordinator.
-  - `AssetAuditUISystem` as bindings/commands only.
-  - mod registration that creates systems but leaves heavy work idle until requested.
+- Produces: local net48 contract tests for required 1.6.2f1 public members; `CapabilityProbe.Probe(World)`; heavy-work coordinator `AssetAuditSystem`; bindings-only `AssetAuditUISystem`.
 
-- [ ] **Step 1: Add compile-time/contract assertions around required public API usage**
+- [ ] **Step 1: Write failing Adapter Contract tests**
 
-The game project must compile references to `PrefabSystem.GetPrefab/TryGetPrefab`, `PrefabData`, `PrefabRef`, `RenderPrefab`, `LodProperties`, `GeometryAsset`, `SurfaceAsset`, and `TextureAsset` without Reflection. Do not add Harmony.
+Test public contracts for `PrefabSystem.GetPrefab/TryGetPrefab`, `PrefabData`, `PrefabRef`, `RenderPrefab`, `LodProperties`, `GeometryAsset`, `SurfaceAsset`, and `TextureAsset`. Reflection may inspect **public** members only in this test project.
 
-- [ ] **Step 2: Build and verify the project fails before adapters exist**
-
-Run:
+- [ ] **Step 2: Run local adapter tests/build and verify expected failure before implementation**
 
 ```bash
-dotnet build src/CS2AssetPerformanceAuditor/CS2AssetPerformanceAuditor.csproj -c Debug
+dotnet test tests/CS2AssetPerformanceAuditor.AdapterTests/CS2AssetPerformanceAuditor.AdapterTests.csproj
 ```
 
-Expected: FAIL only on intentionally missing adapter/system code.
+Expected: FAIL until required adapter assumptions/tests compile against configured CS2 references.
 
-- [ ] **Step 3: Implement capability probing and idle systems**
+- [ ] **Step 3: Implement capability probe and idle systems**
 
-Probe each feature independently and map failures to `Degraded`/`Unsupported`/`Failed` without throwing startup-wide failure. `OnUpdate` while idle must not enumerate all entities or assets.
+Probe capabilities independently. A single failed collector yields capability degradation rather than startup-wide failure. `AssetAuditSystem.OnUpdate` while idle must not enumerate the world/catalog.
 
-- [ ] **Step 4: Build and verify success**
+- [ ] **Step 4: Verify**
 
-Run the command from Step 2.
-
-Expected: PASS in a correctly configured local CS2 modding environment.
+Run Pure Core tests, local Adapter Contract tests, and game project build where the CS2 toolchain is available. Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/CS2AssetPerformanceAuditor
+git add src tests
 git commit -m "feat: add compatibility foundation"
 ```
 
-**Milestone 0 gate:** Core tests pass, UI build/test scaffolding passes, game project compiles with no Harmony reference, and idle systems perform no full scans.
+**Milestone 0 gate:** Pure Core/UI baselines pass; local public API contracts pass against supplied/current references; game project builds without Harmony; idle systems do no full scans.
 
 ---
 
-## Milestone 1 — Prefab Catalog + Asset Instance Census
+# Milestone 1 — Prefab Catalog + Asset Instance Census
 
 ### Task 6: Implement Prefab catalog access, classification, and source evidence
 
@@ -486,31 +345,22 @@ git commit -m "feat: add compatibility foundation"
 - Create: `src/CS2AssetPerformanceAuditor/GameIntegration/Prefabs/PrefabClassifier.cs`
 - Create: `src/CS2AssetPerformanceAuditor/GameIntegration/Prefabs/SourceMetadataReader.cs`
 - Modify: `src/CS2AssetPerformanceAuditor/GameIntegration/AssetAuditSystem.cs`
+- Modify: `tests/CS2AssetPerformanceAuditor.Tests/PrefabProjectionTests.cs`
 
 **Interfaces:**
-- Consumes: Core `PrefabRecord`, `PrefabKey`, `AssetOriginEvidence`.
-- Produces:
-  - `IReadOnlyList<Entity> CapturePrefabEntities()` from `PrefabData` query.
-  - `bool TryReadPrefab(Entity entity, out PrefabRecord record)` using public `PrefabSystem` resolution.
-  - runtime `Dictionary<Entity, PrefabKey>` for the current world only.
+- Produces: capture of `PrefabData` entities, public `PrefabSystem.TryGetPrefab` resolution, stable PrefabKey, frame-sliced PrefabRecord processing, runtime-only `Entity -> PrefabKey` current-world map.
 
-- [ ] **Step 1: Write/extend pure tests for source projection and trait composition**
+- [ ] **Step 1: Add failing classification/source tests**
 
-Add tests ensuring a Prefab may carry multiple traits and that overlapping source evidence is preserved rather than collapsed into false certainty.
+Pin Building/ServiceBuilding/Prop/Tree/Vehicle/Network trait composition and source-evidence projection without collapsing overlapping evidence.
 
-- [ ] **Step 2: Run tests and verify they fail on missing projection/classification helpers**
-
-```bash
-dotnet test tests/CS2AssetPerformanceAuditor.Tests/CS2AssetPerformanceAuditor.Tests.csproj --filter "ObservationTests|Prefab"
-```
+- [ ] **Step 2: Run focused tests and verify failure**
 
 - [ ] **Step 3: Implement catalog capture and frame-budgeted processing**
 
-Enumerate `PrefabData` entities, resolve through public `PrefabSystem.TryGetPrefab`, build stable `PrefabKey` from PrefabID/type, preserve runtime Entity mapping separately, and process managed classification in time-bounded slices rather than one monolithic frame.
+Never enumerate internal PrefabSystem collections and never use Reflection.
 
-- [ ] **Step 4: Build/test**
-
-Run Core tests plus game project build.
+- [ ] **Step 4: Run Core tests + Adapter tests + game build**
 
 Expected: PASS.
 
@@ -521,7 +371,7 @@ git add src tests
 git commit -m "feat: add prefab catalog collector"
 ```
 
-### Task 7: Implement ECS Census capture and Query Profile v1 classification
+### Task 7: Implement read-only ECS Census capture and coordinator cleanup
 
 **Files:**
 - Create: `src/CS2AssetPerformanceAuditor/GameIntegration/Census/CensusSample.cs`
@@ -529,34 +379,25 @@ git commit -m "feat: add prefab catalog collector"
 - Create: `src/CS2AssetPerformanceAuditor/GameIntegration/Census/CensusAccess.cs`
 - Modify: `src/CS2AssetPerformanceAuditor/GameIntegration/AssetAuditSystem.cs`
 - Modify: `tests/CS2AssetPerformanceAuditor.Tests/CensusReducerTests.cs`
+- Modify: `tests/CS2AssetPerformanceAuditor.Tests/ScanSessionTests.cs`
 
 **Interfaces:**
-- Consumes: runtime `Entity -> PrefabKey`, `CensusReducer`, `ScanSession`.
-- Produces:
-  - `JobHandle BeginObjectCapture(...)`
-  - `JobHandle BeginNetworkCapture(...)`
-  - compact logical `CensusSample(Prefab Entity, CensusCountKind Kind)` data/buffers.
-  - adapter classification preserving Query Profile v1: current object universe, mutually exclusive top-level/subordinate classification, live-reference union, current top-level network edge.
+- Consumes: runtime Prefab map, `CensusReducer`, `ScanSession`, `WorldGeneration`.
+- Produces: async/chunk capture for object and network-edge universes; each logical sample classified exactly once as top-level/subordinate/network-edge; safe native-buffer ownership.
 
-- [ ] **Step 1: Add a failing regression test for duplicate subordinate markers**
+- [ ] **Step 1: Add failing adapter-facing regression tests to Core seams**
 
-The adapter-facing reducer test must show that `Owner + Controller` classification produces one subordinate logical sample, not two.
+Assert a classification result with both Owner+Controller markers becomes one subordinate sample; world generation mismatch blocks publication; cancel/fail leaves previous same-world snapshot intact.
 
-- [ ] **Step 2: Run focused Core tests**
-
-Expected: new test FAIL until the adapter-facing classification helper exists.
+- [ ] **Step 2: Run tests and verify failure**
 
 - [ ] **Step 3: Implement read-only EntityQueries/jobs**
 
-Use `PrefabRef` plus verified object/network component sets. Exclude temporary/deleted/overridden/non-current states according to the target 1.6.2f1 components. Schedule capture and return to the game loop; do not `Complete()` immediately in the scheduling frame.
+Use verified 1.6.2f1 components. Exclude temporary/deleted/overridden/non-current states required by Query Profile v1. Schedule and return; do not immediately `Complete()` in the same frame.
 
-- [ ] **Step 4: Implement coordinator polling/cancellation cleanup**
+- [ ] **Step 4: Implement polling, frame-budgeted reduction, world-change cancellation, and `finally`-equivalent buffer disposal**
 
-When `JobHandle.IsCompleted` becomes true, complete safely, reduce in frame-budgeted slices, dispose native buffers in success/failure/cancel/world-unload paths, and publish only after `Finalizing` succeeds.
-
-- [ ] **Step 5: Build/test**
-
-Run Core tests and game project build.
+- [ ] **Step 5: Verify Core/Adapter/game build**
 
 Expected: PASS.
 
@@ -567,13 +408,15 @@ git add src tests
 git commit -m "feat: capture asset instance census"
 ```
 
-### Task 8: Add Phase 1 query service, diagnostics, and minimal JSON export
+### Task 8: Add bounded query service, diagnostics base, privacy sanitizer, and Phase 1 JSON
 
 **Files:**
 - Create: `src/CS2AssetPerformanceAuditor/Core/Query/AssetQuery.cs`
 - Create: `src/CS2AssetPerformanceAuditor/Core/Query/AssetSort.cs`
 - Create: `src/CS2AssetPerformanceAuditor/Core/Query/AssetPage.cs`
 - Create: `src/CS2AssetPerformanceAuditor/Core/Query/AssetQueryService.cs`
+- Create: `src/CS2AssetPerformanceAuditor/Core/Diagnostics/DiagnosticCode.cs`
+- Create: `src/CS2AssetPerformanceAuditor/Core/Diagnostics/DiagnosticAggregator.cs`
 - Create: `src/CS2AssetPerformanceAuditor/Export/ReportSchema.cs`
 - Create: `src/CS2AssetPerformanceAuditor/Export/AuditReport.cs`
 - Create: `src/CS2AssetPerformanceAuditor/Export/AuditReportBuilder.cs`
@@ -584,46 +427,30 @@ git commit -m "feat: capture asset instance census"
 - Create: `tests/CS2AssetPerformanceAuditor.Tests/PrivacySanitizerTests.cs`
 
 **Interfaces:**
-- Consumes: published Catalog/Census/capability state.
-- Produces:
-  - `AssetPage Query(AssetQuery query)` with bounded `offset`/`limit`.
-  - canonical Phase 1 JSON metadata fields: `schemaVersion`, `ruleSetVersion`, `queryProfileVersion`, `scanOptions`, `modVersion`, `gameVersion`, timestamps, capabilities, catalog, census.
-  - privacy sanitizer rejecting/omitting absolute local paths and machine-identifying fields.
+- Produces: bounded `AssetPage Query(AssetQuery)`; canonical Phase 1 JSON containing schema/rule/query-profile/scan-options/mod/game/timestamp/capability/catalog/census metadata; aggregated diagnostics; no private local paths/runtime Entity indexes.
 
-- [ ] **Step 1: Write failing query/export/privacy tests**
+- [ ] **Step 1: Write failing tests**
 
-Cover:
-- search by display name, Prefab name/ID/source,
-- type/source/presence filters,
-- type-aware `Instances` and `CountKind`,
-- bounded page size,
-- `0` vs `NotScanned`,
-- required version metadata,
-- incompatible query profiles/scan options detectable for comparison,
-- absolute Windows path and username/hostname fields are absent from canonical export.
+Cover name/PrefabID/source search, type/source/presence filters, bounded page size, type-aware `Instances` + `CountKind`, zero vs `NotScanned`, required report versions, repeated diagnostic aggregation, and absence of Windows username/hostname/absolute paths/entity indexes from export.
 
-- [ ] **Step 2: Run tests and verify failure**
+- [ ] **Step 2: Run focused tests and verify failure**
 
-```bash
-dotnet test tests/CS2AssetPerformanceAuditor.Tests/CS2AssetPerformanceAuditor.Tests.csproj --filter "AssetQueryServiceTests|ExportTests|PrivacySanitizerTests"
-```
+- [ ] **Step 3: Implement query/diagnostic/export pipeline**
 
-- [ ] **Step 3: Implement minimal query/export pipeline**
+Use `DataContractJsonSerializer` for net48 compatibility unless the serializer contract tests demonstrate a concrete blocker.
 
-Keep JSON full-fidelity for Phase 1 state. Do not add Phase 2–4 fields yet except schema-safe empty/optional sections.
-
-- [ ] **Step 4: Run focused tests**
+- [ ] **Step 4: Run tests**
 
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/CS2AssetPerformanceAuditor/Core/Query src/CS2AssetPerformanceAuditor/Export tests
+git add src tests
 git commit -m "feat: add census query and export pipeline"
 ```
 
-### Task 9: Build the Phase 1 in-game UI and bounded data bindings
+### Task 9: Build the Phase 1 in-game UI with bounded bindings
 
 **Files:**
 - Create: `src/CS2AssetPerformanceAuditor/UI/UiContracts.cs`
@@ -631,7 +458,7 @@ git commit -m "feat: add census query and export pipeline"
 - Modify: `src/CS2AssetPerformanceAuditor/UI/AssetAuditUISystem.cs`
 - Create: `UI/src/bindings.ts`
 - Create: `UI/src/types.ts`
-- Create: `UI/src/AssetAuditorRoot.tsx`
+- Modify: `UI/src/AssetAuditorRoot.tsx`
 - Create: `UI/src/assetAuditor.module.scss`
 - Create: `UI/src/components/ScanStatus.tsx`
 - Create: `UI/src/components/VirtualAssetTable.tsx`
@@ -645,18 +472,11 @@ git commit -m "feat: add census query and export pipeline"
 - Create: `UI/src/__tests__/escapeClose.test.tsx`
 
 **Interfaces:**
-- Consumes: `AssetQueryService`, `ScanProgress`, capability/diagnostics state.
-- Produces: UI triggers for `RunCensus`, `CancelScan`, bounded `QueryAssets`, minimal JSON export, and settings changes; bounded page/result bindings only.
+- Produces: Run Census/Cancel/query/export/settings triggers; bounded result pages; no full-catalog binding on each UI update.
 
-- [ ] **Step 1: Write failing UI tests**
+- [ ] **Step 1: Write failing UI tests using Vitest + `renderToStaticMarkup` where possible**
 
-Cover Review Focus and spec behavior:
-- no data => `Not scanned`, never `0`.
-- exact progress shows count/percentage; unknown capture progress shows indeterminate stage.
-- `Instances` displays/ exposes `CountKind`.
-- scrolling/query state requests bounded windows rather than rendering a supplied full catalog.
-- Escape and close button close panel; neither cancels scan.
-- reopening while scan active renders current progress.
+Assert `Not scanned` vs zero, exact vs indeterminate progress, visible CountKind, bounded query windows, Escape/close behavior without scan cancellation, and active progress visible after reopen.
 
 - [ ] **Step 2: Run UI tests and verify failure**
 
@@ -664,17 +484,11 @@ Cover Review Focus and spec behavior:
 cd UI && npm test
 ```
 
-- [ ] **Step 3: Implement the minimal Phase 1 UI/bindings**
+- [ ] **Step 3: Implement Overview/Assets/Census/Settings and debounced server-side query flow**
 
-Tabs in this milestone: Overview, Assets, Census, Settings. Keep Warnings/Compare hidden until their data exists. Debounce search before issuing C# query requests.
+Warnings/Compare remain hidden until their milestones.
 
-- [ ] **Step 4: Run UI tests/build and C# tests/build**
-
-```bash
-cd UI && npm test && npm run build
-cd .. && dotnet test tests/CS2AssetPerformanceAuditor.Tests/CS2AssetPerformanceAuditor.Tests.csproj
-dotnet build src/CS2AssetPerformanceAuditor/CS2AssetPerformanceAuditor.csproj -c Debug
-```
+- [ ] **Step 4: Run UI tests/build + C# tests/build**
 
 Expected: PASS.
 
@@ -685,13 +499,13 @@ git add src/CS2AssetPerformanceAuditor/UI UI
 git commit -m "feat: add census audit UI"
 ```
 
-**Milestone 1 gate:** Catalog and Census work end-to-end, scan is user-triggered/cancellable, counts have explicit semantics, UI is bounded, minimal JSON export works, and failed/cancelled scans preserve the previous published snapshot.
+**Milestone 1 gate:** Prefab Catalog + Snapshot Census work end-to-end; cancellation/world change are safe; counts are explicit; UI data transfer is bounded; minimal JSON export is truthful.
 
 ---
 
-## Milestone 2 — Render Graph + Geometry / LOD Auditor
+# Milestone 2 — Render Graph + Geometry / LOD Auditor
 
-### Task 10: Add render-domain contracts and verified resolver architecture
+### Task 10: Implement render-domain contracts and verified resolver coverage
 
 **Files:**
 - Create: `src/CS2AssetPerformanceAuditor/Core/Rendering/RenderAssetKey.cs`
@@ -702,25 +516,22 @@ git commit -m "feat: add census audit UI"
 - Create: `src/CS2AssetPerformanceAuditor/GameIntegration/Rendering/IRenderAssetResolver.cs`
 - Create: `src/CS2AssetPerformanceAuditor/GameIntegration/Rendering/ObjectGeometryResolver.cs`
 - Create: `src/CS2AssetPerformanceAuditor/GameIntegration/Rendering/RenderGraphBuilder.cs`
+- Create: `tests/CS2AssetPerformanceAuditor.Tests/RenderGraphTests.cs`
 
 **Interfaces:**
-- Consumes: `PrefabRecord`/runtime Prefab mapping.
-- Produces:
-  - `IRenderAssetResolver.CanResolve(PrefabBase prefab)` and `Resolve(...)` isolated to Game Integration.
-  - domain `PrefabRenderRelation(PrefabKey, RenderAssetKey, RenderRelationKind)`.
-  - per-Prefab `RenderCoverage` = `Supported`, `NotApplicable`, `Unknown`, or `Failed`.
+- Produces: explicit `RenderCoverage`; Prefab→RenderAsset relations; deduplicated RenderAsset keys; only verified resolver families report Supported.
 
-- [ ] **Step 1: Write failing Pure Core tests for render coverage/dedup semantics**
+- [ ] **Step 1: Write failing tests**
 
-Assert unresolved coverage is not serialized/query-projected as zero geometry and duplicate `RenderAssetKey` references share one resource record.
+Assert unresolved/unsupported family is not zero geometry; two Prefabs sharing one RenderAssetKey produce one resource record; relation kind remains attributable.
 
-- [ ] **Step 2: Run tests and verify failure**
+- [ ] **Step 2: Run and verify failure**
 
-- [ ] **Step 3: Implement ObjectGeometry resolver first**
+- [ ] **Step 3: Implement ObjectGeometry resolver using verified `m_Meshes`/LOD relations only**
 
-Resolve verified `ObjectGeometryPrefab.m_Meshes` and `LodProperties.m_LodMeshes`; do not recursively reflect through arbitrary fields. Network and other unsupported families return explicit coverage until a verified resolver is added.
+No recursive Reflection. Network render path remains explicit Unknown/Unsupported until separately verified.
 
-- [ ] **Step 4: Build/test**
+- [ ] **Step 4: Run tests + Adapter tests + game build**
 
 Expected: PASS.
 
@@ -742,28 +553,19 @@ git commit -m "feat: add render graph resolution"
 - Modify: `src/CS2AssetPerformanceAuditor/GameIntegration/AssetAuditSystem.cs`
 
 **Interfaces:**
-- Consumes: deduplicated `RenderAssetRecord` and `GeometryAsset` references in the adapter.
-- Produces observed mesh/vertex/index/submesh/bounds/compressed-payload metadata plus a domain `TriangleCount` that is numeric only for triangle topology.
+- Produces: observed mesh/vertex/index/submesh/bounds/compressed payload; triangle count only for Triangle topology; GeometryAsset cache keyed per analysis generation.
 
-- [ ] **Step 1: Write failing geometry tests**
+- [ ] **Step 1: Write failing tests**
 
-Pin:
-- Triangles + 300 indices => 100 triangles.
-- Lines + 300 indices => `NotApplicable` triangle count.
-- missing/failed geometry metadata => `Failed`/`Unsupported`, not zero.
-- shared GeometryAsset key is read once per analysis generation.
+Triangles+300 indices => 100; Lines+300 => NotApplicable; missing metadata => Failed/Unsupported, not zero; shared geometry is read once per generation.
 
-- [ ] **Step 2: Run tests and verify failure**
+- [ ] **Step 2: Run and verify failure**
 
-```bash
-dotnet test tests/CS2AssetPerformanceAuditor.Tests/CS2AssetPerformanceAuditor.Tests.csproj --filter GeometryMathTests
-```
+- [ ] **Step 3: Implement metadata-first reader**
 
-- [ ] **Step 3: Implement metadata-first GeometryAsset reader**
+Normal Asset Audit must not call `ObtainMeshes()` across all assets.
 
-Use public AssetDatabase geometry APIs. Do not call `RenderPrefab.ObtainMeshes()` in normal Asset Audit. Copy metadata into domain records and release any temporary data according to API ownership.
-
-- [ ] **Step 4: Run Core tests/game build**
+- [ ] **Step 4: Verify**
 
 Expected: PASS.
 
@@ -777,6 +579,7 @@ git commit -m "feat: audit geometry metadata"
 ### Task 12: Add LOD metrics, peer statistics, and Phase 2 findings
 
 **Files:**
+- Create: `src/CS2AssetPerformanceAuditor/Core/Rendering/LodMetrics.cs`
 - Create: `src/CS2AssetPerformanceAuditor/Core/Findings/FindingStatus.cs`
 - Create: `src/CS2AssetPerformanceAuditor/Core/Findings/FindingBasis.cs`
 - Create: `src/CS2AssetPerformanceAuditor/Core/Findings/FindingCategory.cs`
@@ -788,73 +591,58 @@ git commit -m "feat: audit geometry metadata"
 - Create: `tests/CS2AssetPerformanceAuditor.Tests/FindingEngineTests.cs`
 
 **Interfaces:**
-- Consumes: Catalog traits/source, geometry observations, Render Graph, Census where available.
-- Produces:
-  - deterministic LOD retention/reduction metrics.
-  - `Finding` with `RuleId`, `Status`, `Category`, explanation, evidence, basis, threshold origin/version.
-  - Phase 2 rule families: `GEOMETRY_PEER_OUTLIER`, `SUBMESH_COUNT_OUTLIER`, `GEOMETRY_PAYLOAD_OUTLIER`, `NO_LOWER_LOD_OBSERVED`, `LOD_REDUCTION_LOW`, `LOD_MATERIAL_REDUCTION_LOW`, `LOD_GEOMETRY_INCREASES`.
+- Produces: deterministic LOD retention/reduction; Finding with RuleId/status/category/evidence/basis/rule version; geometry/LOD finding families from the approved spec.
 
-- [ ] **Step 1: Write failing statistic/finding tests**
+- [ ] **Step 1: Write failing tests**
 
-Cover:
-- exact LOD retention/reduction math,
-- missing lower LOD => Observed/Notice only, not automatic Warning,
-- heuristic rule => `PotentialIssue` and `FindingBasis.Heuristic`,
-- deterministic broken reference may be Warning,
-- insufficient peer sample => comparison unavailable, no fabricated percentile finding,
-- missing evidence => no fabricated finding,
-- same-category population selection is stable.
+Cover exact retention math; no lower LOD is observation/notice, not automatic warning; heuristic => PotentialIssue; broken required reference may be Warning; insufficient peer sample => unavailable; missing evidence => no fabricated finding; same-category population selection is stable.
 
-- [ ] **Step 2: Run tests and verify failure**
+- [ ] **Step 2: Run and verify failure**
 
-- [ ] **Step 3: Implement statistics and rule engine**
+- [ ] **Step 3: Implement pure Core statistics/rule engine with versioned heuristic definitions**
 
-No Game APIs in the rule engine. Keep threshold definitions versioned under `RuleSetInfo`; do not label heuristic values as official guidance.
+- [ ] **Step 4: Run tests**
 
-- [ ] **Step 4: Run tests and verify pass**
+Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/CS2AssetPerformanceAuditor/Core/Findings tests
+git add src tests
 git commit -m "feat: add geometry and lod findings"
 ```
 
-**Milestone 2 gate:** verified Prefab families resolve to a deduplicated Render Graph, GeometryAsset metadata and topology-aware triangles are available without mass Unity Mesh materialization, LOD evidence is computed, unsupported render families remain explicit, and findings are evidence-backed.
+**Milestone 2 gate:** verified render families resolve to a deduplicated Render Graph; Geometry/LOD metadata is truthful without mass Mesh materialization; findings carry evidence and basis.
 
 ---
 
-## Milestone 3 — Surface / Texture Auditor
+# Milestone 3 — Surface / Texture Auditor
 
-### Task 13: Collect SurfaceAsset and TextureAsset metadata with safe resource ownership
+### Task 13: Collect SurfaceAsset/TextureAsset metadata and estimate logical texture payload
 
 **Files:**
 - Create: `src/CS2AssetPerformanceAuditor/Core/Rendering/SurfaceObservation.cs`
 - Create: `src/CS2AssetPerformanceAuditor/Core/Rendering/TextureObservation.cs`
+- Create: `src/CS2AssetPerformanceAuditor/Core/Rendering/TextureFootprintEstimator.cs`
 - Create: `src/CS2AssetPerformanceAuditor/GameIntegration/Rendering/SurfaceAssetReader.cs`
 - Create: `src/CS2AssetPerformanceAuditor/GameIntegration/Rendering/TextureAssetReader.cs`
 - Create: `tests/CS2AssetPerformanceAuditor.Tests/TextureFootprintTests.cs`
 - Modify: `src/CS2AssetPerformanceAuditor/GameIntegration/AssetAuditSystem.cs`
 
 **Interfaces:**
-- Consumes: deduplicated RenderAsset/SurfaceAsset references.
-- Produces observed surface/material-template/VT/property/texture-relation metadata and texture width/height/depth/format/dimension/mips/filter/wrap/anisotropy observations.
+- Produces: observed surface/template/VT/property/texture-relation metadata; observed texture dimensions/format/mips/filter/wrap/aniso; Estimated logical full payload; shared texture cache.
 
-- [ ] **Step 1: Write failing texture-footprint tests**
+- [ ] **Step 1: Write failing footprint/resource tests**
 
-Cover representative compressed and uncompressed formats, block rounding, mip chains, and unsupported format behavior. Assert estimated payload is explicitly `Estimated` and never named/serialized as actual VRAM.
+Cover representative block-compressed/uncompressed formats, block rounding, mip chains, unsupported formats, estimated-vs-VRAM terminology, and one unique shared texture despite multiple references.
 
-- [ ] **Step 2: Run tests and verify failure**
+- [ ] **Step 2: Run and verify failure**
 
-```bash
-dotnet test tests/CS2AssetPerformanceAuditor.Tests/CS2AssetPerformanceAuditor.Tests.csproj --filter TextureFootprintTests
-```
+- [ ] **Step 3: Implement metadata-first readers and estimator**
 
-- [ ] **Step 3: Implement metadata-first Surface/Texture readers**
+Prefer SurfaceAsset/TextureAsset metadata/property APIs; do not materialize Unity Material/Texture globally. Deterministically unload temporary property data when owned by the adapter.
 
-Prefer `SurfaceAsset`/`TextureAsset` properties and property-loading APIs over Unity Material/Texture construction. Deduplicate shared texture assets. Any property data loaded by the adapter must be unloaded in deterministic cleanup paths when the API gives the mod ownership of that loaded state.
-
-- [ ] **Step 4: Run tests/game build**
+- [ ] **Step 4: Verify**
 
 Expected: PASS.
 
@@ -865,80 +653,25 @@ git add src tests
 git commit -m "feat: audit surface and texture metadata"
 ```
 
-### Task 14: Add material/texture/exposure finding families and unique-resource aggregation
+### Task 14: Add material/texture/exposure finding families and resource aggregation
 
 **Files:**
+- Create: `src/CS2AssetPerformanceAuditor/Core/Rendering/ResourceAggregation.cs`
 - Modify: `src/CS2AssetPerformanceAuditor/Core/Findings/FindingEngine.cs`
 - Modify: `src/CS2AssetPerformanceAuditor/Core/Findings/RuleSetInfo.cs`
 - Modify: `tests/CS2AssetPerformanceAuditor.Tests/FindingEngineTests.cs`
 - Modify: `tests/CS2AssetPerformanceAuditor.Tests/TextureFootprintTests.cs`
 
 **Interfaces:**
-- Consumes: Surface/Texture observations plus Census exposure.
-- Produces rule families `MATERIAL_COUNT_OUTLIER`, `TEXTURE_DIMENSION_OUTLIER`, `TEXTURE_PAYLOAD_OUTLIER`, `HIGH_UNIQUE_TEXTURE_FOOTPRINT`, `HIGH_CITY_EXPOSURE`, `HIGH_SUBORDINATE_EXPOSURE`, and integrity findings for failed/unresolved metadata.
+- Produces: referenced-vs-unique texture/resource totals and Phase 3 material/texture/exposure/integrity finding families.
 
-- [ ] **Step 1: Add failing finding tests**
+- [ ] **Step 1: Write failing tests**
 
-Assert:
-- shared texture referenced three times contributes once to unique payload and three times only to reference count.
-- high exposure alone is Notice/PotentialIssue evidence, never proof of render cost.
-- item-level failed texture read produces integrity evidence without aborting unrelated asset findings.
-- peer-outlier sample rules remain enforced.
+Shared texture referenced three times => one unique payload; high city/subordinate exposure remains exposure evidence, not render-cost proof; failed texture read remains item-level finding and unrelated assets still evaluate; no global score is produced.
 
-- [ ] **Step 2: Run tests and verify failure**
+- [ ] **Step 2: Run and verify failure**
 
-- [ ] **Step 3: Implement the Phase 3 rules/aggregations**
-
-Keep separate geometry, LOD, material, texture, and city exposure dimensions; do not introduce a combined score.
-
-- [ ] **Step 4: Run tests and verify pass**
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src tests
-git commit -m "feat: add surface texture and exposure findings"
-```
-
-**Milestone 3 gate:** surface/texture metadata and estimated logical payloads work without claiming actual VRAM, shared resources are deduplicated, and Phase 3 findings remain evidence/basis/version aware.
-
----
-
-## Milestone 4 — Analysis UX, compare, full export, and Deep Inspection
-
-### Task 15: Expand query/export schemas for complete audit data and comparison compatibility
-
-**Files:**
-- Modify: `src/CS2AssetPerformanceAuditor/Core/Query/AssetQueryService.cs`
-- Modify: `src/CS2AssetPerformanceAuditor/Export/AuditReport.cs`
-- Modify: `src/CS2AssetPerformanceAuditor/Export/AuditReportBuilder.cs`
-- Modify: `src/CS2AssetPerformanceAuditor/Export/AuditReportSerializer.cs`
-- Create: `src/CS2AssetPerformanceAuditor/Export/CsvSummaryExporter.cs`
-- Create: `tests/CS2AssetPerformanceAuditor.Tests/ReportCompatibilityTests.cs`
-- Modify: `tests/CS2AssetPerformanceAuditor.Tests/ExportTests.cs`
-
-**Interfaces:**
-- Consumes: full published Observation Store state.
-- Produces:
-  - canonical hierarchical JSON with catalog/census/render/geometry/surface/texture/findings and all evidence classifications.
-  - CSV flat summary.
-  - export scopes: full, current filtered assets, selected assets, census only, findings only.
-  - compatibility result for `schemaVersion`, `queryProfileVersion`, and materially different `scanOptions`.
-
-- [ ] **Step 1: Write failing export/compatibility tests**
-
-Cover:
-- full hierarchy preserves Observed/Derived/Estimated/Unavailable classifications,
-- JSON contains no runtime Entity index/local absolute path,
-- CSV is flat and does not pretend to preserve Render Graph hierarchy,
-- incompatible query profile or materially different scan options raises comparison warning,
-- additive optional fields do not silently change existing field meaning.
-
-- [ ] **Step 2: Run tests and verify failure**
-
-- [ ] **Step 3: Implement full report/CSV builders**
-
-Keep schema version explicit. If implementation changes a previously specified field meaning, increment schema version rather than silently reusing the old contract.
+- [ ] **Step 3: Implement resource aggregation and Phase 3 rules**
 
 - [ ] **Step 4: Run tests**
 
@@ -947,11 +680,53 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/CS2AssetPerformanceAuditor/Export src/CS2AssetPerformanceAuditor/Core/Query tests
+git add src tests
+git commit -m "feat: add surface texture and exposure findings"
+```
+
+**Milestone 3 gate:** Surface/Texture metadata and safe estimates are available; actual VRAM is never inferred; shared resources and failures are handled truthfully.
+
+---
+
+# Milestone 4 — Analysis UX, export, Deep Inspection, settings, validation
+
+### Task 15: Complete report compatibility, full JSON, and CSV summary export
+
+**Files:**
+- Create: `src/CS2AssetPerformanceAuditor/Export/ReportCompatibility.cs`
+- Create: `src/CS2AssetPerformanceAuditor/Export/CsvSummaryExporter.cs`
+- Modify: `src/CS2AssetPerformanceAuditor/Export/AuditReport.cs`
+- Modify: `src/CS2AssetPerformanceAuditor/Export/AuditReportBuilder.cs`
+- Modify: `src/CS2AssetPerformanceAuditor/Export/AuditReportSerializer.cs`
+- Modify: `src/CS2AssetPerformanceAuditor/Core/Query/AssetQueryService.cs`
+- Create: `tests/CS2AssetPerformanceAuditor.Tests/ReportCompatibilityTests.cs`
+- Modify: `tests/CS2AssetPerformanceAuditor.Tests/ExportTests.cs`
+
+**Interfaces:**
+- Produces: hierarchical full JSON; flat CSV; export scopes Full/Filtered/Selected/Census/Findings; compatibility warning for schema/query-profile/materially-different scan options.
+
+- [ ] **Step 1: Write failing tests**
+
+Assert hierarchy preserves evidence classes; CSV remains flat; incompatible profiles/options warn before census comparison; runtime IDs/private paths stay absent; additive optional fields do not silently change existing meaning.
+
+- [ ] **Step 2: Run and verify failure**
+
+- [ ] **Step 3: Implement report compatibility and export builders**
+
+Increment schema version if implementation changes an already-defined field meaning.
+
+- [ ] **Step 4: Run tests**
+
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src tests
 git commit -m "feat: add full audit report exports"
 ```
 
-### Task 16: Implement selected-asset Deep Inspection with deterministic resource cleanup
+### Task 16: Implement selected-asset Deep Inspection with explicit ownership boundaries
 
 **Files:**
 - Create: `src/CS2AssetPerformanceAuditor/GameIntegration/Rendering/DeepInspectionReader.cs`
@@ -960,20 +735,20 @@ git commit -m "feat: add full audit report exports"
 - Create: `docs/validation/runtime-validation.md`
 
 **Interfaces:**
-- Consumes: selected `RenderAssetKey` only.
-- Produces: copied domain observations for shader/material/advanced binding data; never stores Unity Material/Mesh/Texture objects in the Observation Store.
+- Consumes: one selected RenderAssetKey.
+- Produces: copied shader/material/advanced-binding observations only; Observation Store never retains Unity Material/Mesh/Texture objects.
 
-- [ ] **Step 1: Add cleanup-path design assertions/documented runtime scenarios**
+- [ ] **Step 1: Write the runtime ownership scenarios before implementation**
 
-The runtime validation matrix must explicitly cover success, cancellation, exception, repeated inspection, and game-owned shared-object cases.
+Add explicit NOT RUN scenarios for success, cancellation, exception, repeated inspection, and game-owned shared objects.
 
-- [ ] **Step 2: Implement Deep Inspection ownership boundaries**
+- [ ] **Step 2: Implement `try/finally`-equivalent cleanup and ownership rules**
 
-Use `try/finally`-equivalent cleanup. Destroy/unload/dispose only resources whose ownership was acquired by the mod; do not destroy game-owned shared objects. Copy all retained values into domain records before cleanup.
+Destroy/unload/dispose only resources acquired/owned by the mod. Copy retained values to Core observations before cleanup.
 
-- [ ] **Step 3: Build and run automated tests**
+- [ ] **Step 3: Run all automated tests and game build**
 
-Expected: PASS. Runtime ownership scenarios remain `NOT RUN` until actually tested in game.
+Expected: PASS. Runtime ownership scenarios remain NOT RUN until actually executed.
 
 - [ ] **Step 4: Commit**
 
@@ -982,7 +757,7 @@ git add src docs/validation/runtime-validation.md
 git commit -m "feat: add selected asset deep inspection"
 ```
 
-### Task 17: Build Warnings, Asset Details, Render Structure, and Compare UI
+### Task 17: Build Warnings, Asset Details, Render Structure, Compare, and final settings UI
 
 **Files:**
 - Create: `UI/src/components/FindingBadge.tsx`
@@ -996,198 +771,136 @@ git commit -m "feat: add selected asset deep inspection"
 - Create: `UI/src/details/MaterialDetails.tsx`
 - Create: `UI/src/details/TextureDetails.tsx`
 - Create: `UI/src/__tests__/findings.test.tsx`
+- Create: `UI/src/__tests__/settings.test.tsx`
 - Modify: `UI/src/AssetAuditorRoot.tsx`
 - Modify: `UI/src/tabs/AssetsTab.tsx`
+- Modify: `UI/src/tabs/SettingsTab.tsx`
+- Modify: `src/CS2AssetPerformanceAuditor/Setting.cs`
+- Modify: `src/CS2AssetPerformanceAuditor/UI/UiContracts.cs`
+- Modify: `src/CS2AssetPerformanceAuditor/UI/AssetAuditUISystem.cs`
 
 **Interfaces:**
-- Consumes: bounded asset detail/compare/finding DTOs from `AssetAuditUISystem`.
-- Produces: expandable evidence, 2–4 asset comparison, render-structure drill-down, no automatic winner/global score.
+- Produces: expandable evidence, 2–4 asset comparison, render-structure detail, bounded settings, scan options, no automatic winner/global score.
 
-- [ ] **Step 1: Write failing UI tests**
+- [ ] **Step 1: Write failing UI/settings tests**
 
-Cover:
-- Finding shows status, evidence, basis, and rule ID/version.
-- `LOD1 retains 83.98%` evidence renders source metrics when supplied.
-- unsupported render coverage renders Unknown/Unsupported, not zero geometry.
-- Compare accepts 2–4 assets and does not render a “best asset” verdict.
-- actual GPU residency unavailable label remains distinct from estimated texture payload.
+Assert finding status/evidence/basis/rule version; unsupported render coverage != zero geometry; Compare supports 2–4 and no winner; estimated payload != GPU residency; disabled optional metric changes scanOptions and renders NotScanned; unsafe settings clamp/reject; Escape closes UI without cancel.
 
 - [ ] **Step 2: Run UI tests and verify failure**
 
-```bash
-cd UI && npm test
-```
+- [ ] **Step 3: Implement detail/warnings/compare/settings flow**
 
-- [ ] **Step 3: Implement the Phase 4 detail/warning/compare UI**
+List queries remain bounded; one selected asset may request its full detail hierarchy.
 
-Keep large list data bounded; detail endpoints may return one selected asset's full hierarchy. Do not ship full catalog state into every React update.
-
-- [ ] **Step 4: Run UI test/build**
+- [ ] **Step 4: Run UI tests/build + C# tests/build**
 
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add UI
-git commit -m "feat: add asset analysis details and compare UI"
+git add UI src
+git commit -m "feat: add asset analysis ux"
 ```
 
-### Task 18: Finish Settings, diagnostics, performance telemetry, and UI scan controls
+### Task 18: Finish diagnostics/self-telemetry, runtime validation matrix, update procedure, and CI-safe checks
 
 **Files:**
-- Modify: `src/CS2AssetPerformanceAuditor/Setting.cs`
+- Create: `src/CS2AssetPerformanceAuditor/Core/Diagnostics/ScanTelemetry.cs`
+- Modify: `src/CS2AssetPerformanceAuditor/Core/Diagnostics/DiagnosticAggregator.cs`
 - Modify: `src/CS2AssetPerformanceAuditor/GameIntegration/AssetAuditSystem.cs`
 - Modify: `src/CS2AssetPerformanceAuditor/UI/UiContracts.cs`
-- Modify: `src/CS2AssetPerformanceAuditor/UI/AssetAuditUISystem.cs`
-- Modify: `UI/src/tabs/SettingsTab.tsx`
-- Modify: `UI/src/components/ScanStatus.tsx`
-- Create: `UI/src/__tests__/settings.test.tsx`
-
-**Interfaces:**
-- Consumes: scan coordinator, diagnostics/capability state.
-- Produces bounded settings for frame-processing budget, progress update rate, catalog refresh, subordinate collection, heuristic/peer findings, UI scale, cache/deep-inspection limits; diagnostics include game/mod version, compatibility, capability states, `Harmony: not used`, last-scan timings, aggregated failures.
-
-- [ ] **Step 1: Write failing settings/diagnostics tests**
-
-Cover:
-- optional metric disabled => `scanOptions` changes and metric becomes `NotScanned`, not zero.
-- unsafe numeric settings clamp/reject to safe bounds.
-- settings indicate Immediate/Next Scan/Restart semantics.
-- repeated identical diagnostic codes aggregate instead of flooding UI/logs.
-- `Harmony: not used` is exposed in Diagnostics.
-
-- [ ] **Step 2: Run tests and verify failure**
-
-- [ ] **Step 3: Implement settings/diagnostics/self-telemetry**
-
-Record low-cost scan elapsed time, processed count, max/P95 managed slice where practical without enabling continuous heavy profiling.
-
-- [ ] **Step 4: Run all automated tests/builds**
-
-```bash
-dotnet test tests/CS2AssetPerformanceAuditor.Tests/CS2AssetPerformanceAuditor.Tests.csproj
-cd UI && npm test && npm run build
-cd .. && dotnet build src/CS2AssetPerformanceAuditor/CS2AssetPerformanceAuditor.csproj -c Debug
-```
-
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src UI
-git commit -m "feat: finalize auditor settings and diagnostics"
-```
-
-### Task 19: Add runtime validation matrix, update procedure, and CI-safe checks
-
-**Files:**
 - Modify: `docs/validation/runtime-validation.md`
 - Modify: `README.md`
 - Create: `.github/workflows/core-ui-tests.yml`
 
 **Interfaces:**
-- Consumes: all implemented Phases 0–4.
-- Produces: explicit `PASS` / `FAIL` / `NOT RUN` / `BLOCKED` runtime matrix and update checklist; CI that runs what can run without redistributing game DLLs.
+- Produces: low-cost elapsed/processed/max/P95 slice telemetry where measurable; Diagnostics showing compatibility/capabilities/`Harmony: not used`; explicit runtime PASS/FAIL/NOT RUN/BLOCKED matrix; CI that does not redistribute game DLLs.
 
-- [ ] **Step 1: Write the validation matrix before claiming runtime success**
+- [ ] **Step 1: Add failing Core tests for telemetry/diagnostic aggregation where game-independent**
 
-Include at minimum:
-- Vanilla small city,
-- large city,
-- custom-asset-heavy city,
-- broken/incomplete asset,
-- world change during scan,
-- UI close/Escape during scan,
-- Deep Inspection ownership/repetition.
+Repeated same code aggregates; telemetry percentile/max calculations are deterministic; no heavy continuous profiler dependency is introduced.
 
-Record entity/Prefab/render-asset count, total scan time, max/P95 managed slice, and memory/allocation delta where measurable.
+- [ ] **Step 2: Complete runtime validation scenarios**
 
-- [ ] **Step 2: Add CI for Pure Core and UI tests**
+Include Vanilla small city, large city, custom-asset-heavy city, broken/incomplete asset, world change during scan, UI close/Escape during scan, and Deep Inspection ownership. Record entity/Prefab/render-asset counts, total time, max/P95 managed slice, memory/allocation delta where measurable.
 
-CI must not require committed game DLLs. If game-project build cannot run legally/technically on hosted CI, document it as a local/runtime validation step rather than marking it as CI PASS.
+- [ ] **Step 3: Add CI and game-update procedure**
 
-- [ ] **Step 3: Add the game-update checklist to README/validation docs**
+CI runs Pure Core tests and UI tests/build. Local Adapter/game build remain documented local checks when CS2 references/toolchain are required. Update order: compile new DLL/toolchain -> Core tests -> Adapter contracts -> capability probe -> Vanilla validation -> custom-asset validation -> large-city performance validation -> mark Supported.
 
-Order: new DLL/toolchain compile -> Pure Core tests -> Adapter Contract/build checks -> capability probe -> Vanilla runtime validation -> Custom Asset validation -> large-city performance validation -> mark version Supported.
-
-- [ ] **Step 4: Run the locally available verification commands**
+- [ ] **Step 4: Run all executable automated verification**
 
 ```bash
 dotnet test tests/CS2AssetPerformanceAuditor.Tests/CS2AssetPerformanceAuditor.Tests.csproj
 cd UI && npm test && npm run build
 ```
 
-Run the game-project build as well when the CS2 toolchain is available.
-
-Expected: all executable automated checks PASS; unexecuted game scenarios remain `NOT RUN`, never inferred PASS.
+Also run Adapter tests/game Release build where the local CS2 toolchain is available. Expected: all executed checks PASS; unexecuted game scenarios remain NOT RUN/BLOCKED.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add .github README.md docs/validation/runtime-validation.md
-git commit -m "test: add auditor validation and ci workflow"
+git add -A
+git commit -m "test: add auditor validation and ci"
 ```
 
-**Milestone 4 gate:** Asset Details, Warnings, Compare, full JSON/CSV export, selected Deep Inspection, settings, diagnostics, validation docs, and CI-safe tests are complete. All automated checks pass; runtime scenarios are truthfully marked with their executed status.
+**Milestone 4 gate:** Asset Details, Findings, Compare, full exports, selected Deep Inspection, settings, diagnostics, validation docs, and CI-safe checks are complete. Runtime status remains evidence-based.
 
 ---
 
-## Final verification before release/merge
+# Final verification
 
-### Task 20: Whole-project verification and spec conformance review
+### Task 19: Whole-project spec-conformance review
 
 **Files:**
-- Modify only files required by discovered defects.
 - Review: `docs/superpowers/specs/2026-09-27-asset-performance-auditor-design.md`
 - Review: `docs/superpowers/plans/2026-09-27-asset-performance-auditor-implementation.md`
 - Review: `docs/validation/runtime-validation.md`
+- Modify only files required by discovered defects.
 
 **Interfaces:**
-- Consumes: all prior tasks.
-- Produces: a branch where code, tests, documentation, and runtime claims agree with the approved spec.
+- Produces: code/tests/docs whose claims all agree with the approved spec.
 
 - [ ] **Step 1: Run all automated verification**
 
 ```bash
 dotnet test tests/CS2AssetPerformanceAuditor.Tests/CS2AssetPerformanceAuditor.Tests.csproj
 cd UI && npm test && npm run build
-cd .. && dotnet build src/CS2AssetPerformanceAuditor/CS2AssetPerformanceAuditor.csproj -c Release
 ```
 
-Expected: PASS in an environment with the CS2 toolchain available for the final command.
+Run local Adapter tests and `dotnet build ... -c Release` where the CS2 toolchain exists.
 
-- [ ] **Step 2: Search the source for forbidden/unsafe design regressions**
+- [ ] **Step 2: Search source/project files for prohibited regressions**
 
-Verify there is no `Lib.Harmony` dependency, no Harmony patch attribute/use, no Reflection-based hidden-member fallback, no unconditional `indexCount / 3` outside topology-aware logic, no global performance score, and no automatic periodic full scan.
+Confirm no `Lib.Harmony`, Harmony patches, runtime private-member Reflection fallback, unconditional `indexCount / 3`, global performance score, periodic automatic full scan, or committed game DLLs.
 
-- [ ] **Step 3: Review the five Review Focus conditions against tests/runtime validation**
+- [ ] **Step 3: Re-check all five Review Focus items**
 
-Each condition at the top of this plan must have either an automated regression test or an explicit runtime validation scenario. Fix any uncovered gap before completion.
+Each must have an automated regression test and/or explicit executed runtime validation scenario owned by the relevant task. Add any missing coverage before completion.
 
 - [ ] **Step 4: Reconcile runtime claims**
 
-Any runtime scenario not actually executed remains `NOT RUN`/`BLOCKED`. Do not convert build/unit-test evidence into in-game PASS.
+Anything not actually executed remains NOT RUN/BLOCKED. Build/unit-test evidence never becomes in-game PASS.
 
-- [ ] **Step 5: Commit any verification fixes**
+- [ ] **Step 5: Commit verification fixes if any**
 
 ```bash
 git add -A
 git commit -m "test: verify asset performance auditor"
 ```
 
-Skip this commit if verification required no source/document changes.
+Skip this commit if no files changed.
 
 ---
 
-## Phase delivery summary
+## Delivery map
 
-- **Phase 0:** Tasks 1–5 — project foundation, testable Core, compatibility/capability layer.
-- **Phase 1:** Tasks 6–9 — Prefab Catalog, Snapshot Census, bounded UI/query/export.
-- **Phase 2:** Tasks 10–12 — Render Graph, Geometry/LOD analysis, evidence-backed geometry/LOD findings.
-- **Phase 3:** Tasks 13–14 — Surface/Texture analysis, safe footprint estimates, material/texture/exposure findings.
-- **Phase 4:** Tasks 15–19 — full export, Deep Inspection, Asset Details, Warnings, Compare, Settings, diagnostics, validation/CI.
-- **Final verification:** Task 20.
+- **Phase 0:** Tasks 1–5 — green repository baseline, Core contracts, scan semantics, Adapter contracts, compatibility/capability layer.
+- **Phase 1:** Tasks 6–9 — Prefab Catalog, Snapshot Census, bounded query/export/UI.
+- **Phase 2:** Tasks 10–12 — Render Graph, Geometry/LOD analysis, geometry/LOD findings.
+- **Phase 3:** Tasks 13–14 — Surface/Texture analysis, safe estimates, material/texture/exposure findings.
+- **Phase 4:** Tasks 15–18 — full export, Deep Inspection, Analysis UX, settings, diagnostics, validation/CI.
+- **Final verification:** Task 19.
 
-Implementation should stop at each milestone gate for tests/review before advancing. The implementation may optimize internal ECS/job details if profiling justifies it, but it must preserve the domain contracts and observable semantics specified here and in the approved design document.
+Stop at each milestone gate for tests/review before advancing. Internal ECS/job optimizations may change only when profiling justifies them and must preserve the public/domain semantics in the approved spec and this plan.

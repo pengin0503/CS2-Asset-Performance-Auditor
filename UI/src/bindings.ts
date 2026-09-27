@@ -31,6 +31,9 @@ export const nativeBindings: AssetAuditorBindings = {
   requestCensus(options: UiScanOptions): void {
     trigger(UI_BINDING_GROUP, "requestCensus", JSON.stringify(normalizeUiSettings(options)));
   },
+  requestAssetAudit(options: UiScanOptions): void {
+    trigger(UI_BINDING_GROUP, "requestAssetAudit", JSON.stringify(normalizeUiSettings(options)));
+  },
   cancelCensus(): void {
     trigger(UI_BINDING_GROUP, "cancelCensus");
   },

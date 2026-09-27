@@ -16,7 +16,7 @@ export function OverviewTab({
     <section className="apa__tab-content" aria-labelledby="apa-overview-title">
       <div className="apa__section-heading">
         <div>
-          <p className="apa__eyebrow">Phase 1 snapshot</p>
+          <p className="apa__eyebrow">Snapshot auditor</p>
           <h2 id="apa-overview-title">Overview</h2>
         </div>
         <div className="apa__actions">
@@ -27,6 +27,14 @@ export function OverviewTab({
             onClick={() => bindings.requestCensus(settings)}
           >
             Run Census
+          </button>
+          <button
+            type="button"
+            className="apa__button apa__button--primary"
+            disabled={isActive}
+            onClick={() => bindings.requestAssetAudit(settings)}
+          >
+            Run Asset Audit
           </button>
           <button type="button" className="apa__button" onClick={bindings.requestExport}>
             Prepare JSON export

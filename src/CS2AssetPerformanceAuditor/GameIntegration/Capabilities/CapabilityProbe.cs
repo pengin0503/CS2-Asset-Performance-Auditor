@@ -28,7 +28,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Capabilities
                 new CapabilityStatus(CapabilityId.SubmeshMetadata, CapabilityState.Supported, "topology_aware_submesh_reader_available"),
                 new CapabilityStatus(CapabilityId.SurfaceMetadata, CapabilityState.Supported, "surface_metadata_reader_available"),
                 new CapabilityStatus(CapabilityId.TextureMetadata, CapabilityState.Supported, "texture_metadata_reader_available"),
-                new CapabilityStatus(CapabilityId.ShaderDeepInspection, CapabilityState.Degraded, "deep_shader_inspection_not_implemented"),
+                new CapabilityStatus(CapabilityId.ShaderDeepInspection, CapabilityState.Supported, "selected_render_prefab_deep_inspection_available"),
                 new CapabilityStatus(CapabilityId.RuntimeGpuResidency, CapabilityState.Unsupported, "runtime_gpu_residency_is_out_of_scope")
             };
             var version = Application.version;

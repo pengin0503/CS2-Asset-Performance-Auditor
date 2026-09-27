@@ -21,6 +21,7 @@ namespace CS2AssetPerformanceAuditor.UI
         private readonly DiagnosticAggregator _diagnostics = new DiagnosticAggregator();
         private readonly AuditReportSerializer _reportSerializer = new AuditReportSerializer();
         private readonly AuditReportBuilder _reportBuilder = new AuditReportBuilder(new PrivacySanitizer());
+        private readonly CsvSummaryExporter _csvExporter = new CsvSummaryExporter();
 
         private ValueBinding<string>? _snapshotBinding;
         private ValueBinding<string>? _exportBinding;
@@ -46,7 +47,7 @@ namespace CS2AssetPerformanceAuditor.UI
             AddBinding(new TriggerBinding<string>(UiBindingContract.Group, UiBindingContract.RequestDeepInspection, HandleRequestDeepInspection, new Colossal.UI.Binding.StringReader()));
             AddBinding(new TriggerBinding(UiBindingContract.Group, UiBindingContract.CancelCensus, HandleCancelCurrentScan));
             AddBinding(new TriggerBinding<string>(UiBindingContract.Group, UiBindingContract.QueryAssets, HandleQueryAssets, new Colossal.UI.Binding.StringReader()));
-            AddBinding(new TriggerBinding(UiBindingContract.Group, UiBindingContract.RequestExport, HandleRequestExport));
+            AddBinding(new TriggerBinding<string>(UiBindingContract.Group, UiBindingContract.RequestExport, HandleRequestExport, new Colossal.UI.Binding.StringReader()));
             AddBinding(new TriggerBinding<string>(UiBindingContract.Group, UiBindingContract.UpdateSettings, HandleUpdateSettings, new Colossal.UI.Binding.StringReader()));
             RefreshAssetPage(GetAuditSystem(), force: true);
             PublishSnapshot(force: true);
@@ -176,13 +177,17 @@ namespace CS2AssetPerformanceAuditor.UI
             }
         }
 
-        private void HandleRequestExport()
+        private void HandleRequestExport(string requestJson)
         {
             var auditSystem = GetAuditSystem();
             if (auditSystem?.Capabilities == null || _exportBinding == null)
                 return;
             try
             {
+                if (!UiSnapshotBuilder.TryDeserialize<UiExportRequest>(requestJson, out var request))
+                    throw new ArgumentException("The export request payload was invalid.");
+                var scope = ParseEnum(request.Scope, ExportScope.Full);
+                var includedKeys = ResolveExportKeys(auditSystem, request, scope);
                 var report = _reportBuilder.BuildCurrent(
                     auditSystem.CatalogRecords,
                     auditSystem.CatalogGeneration,
@@ -192,14 +197,36 @@ namespace CS2AssetPerformanceAuditor.UI
                     auditSystem.Capabilities,
                     ProjectInfo.ModVersion,
                     DateTimeOffset.UtcNow,
-                    _diagnostics.Snapshot());
-                _exportBinding.Update(_reportSerializer.Serialize(report));
+                    _diagnostics.Snapshot(),
+                    scope,
+                    includedKeys);
+                _exportBinding.Update(string.Equals(request.Format, "Csv", StringComparison.Ordinal)
+                    ? _csvExporter.Export(report)
+                    : _reportSerializer.Serialize(report));
             }
             catch
             {
                 _diagnostics.Add("APA-EXP-001", "audit_report_export_failed");
                 _exportBinding.Update("{\"errorCode\":\"APA-EXP-001\"}");
             }
+        }
+
+        private IEnumerable<PrefabKey>? ResolveExportKeys(AssetAuditSystem auditSystem, UiExportRequest request, ExportScope scope)
+        {
+            if (scope == ExportScope.Filtered)
+            {
+                return new AssetQueryService(auditSystem.CatalogRecords, auditSystem.PublishedCensus, auditSystem.CatalogGeneration)
+                    .QueryMatchingKeys(_assetQuery);
+            }
+            if (scope != ExportScope.Selected)
+                return null;
+            if (request.SelectedKeys == null || request.SelectedKeys.Length == 0)
+                throw new ArgumentException("Selected export requires at least one stable Prefab key.");
+            return request.SelectedKeys
+                .Where(key => key != null && !string.IsNullOrWhiteSpace(key.PrefabId) && !string.IsNullOrWhiteSpace(key.PrefabType))
+                .Select(key => new PrefabKey(key.PrefabId, key.PrefabType))
+                .Distinct()
+                .ToArray();
         }
 
         private bool RefreshAssetPage(AssetAuditSystem? auditSystem, bool force)

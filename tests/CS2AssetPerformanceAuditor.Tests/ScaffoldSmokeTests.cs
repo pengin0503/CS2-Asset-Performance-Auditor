@@ -10,8 +10,8 @@ public sealed class ScaffoldSmokeTests
     [Test]
     public void ProjectInfo_exposes_product_name_and_declares_no_harmony()
     {
-        var projectInfo = typeof(ScaffoldSmokeTests).Assembly.GetType("CS2AssetPerformanceAuditor.Core.ProjectInfo", throwOnError: false);
-        Assert.That(projectInfo, Is.Not.Null, "Core ProjectInfo type is missing.");
+        var projectInfo = typeof(ScaffoldSmokeTests).Assembly.GetType("CS2AssetPerformanceAuditor.Core.ProjectInfo", false);
+        Assert.That(projectInfo, Is.Not.Null);
         Assert.That(projectInfo!.GetProperty("ProductName", BindingFlags.Public | BindingFlags.Static)?.GetValue(null), Is.EqualTo("CS2 Asset Performance Auditor"));
         Assert.That(projectInfo.GetProperty("UsesHarmony", BindingFlags.Public | BindingFlags.Static)?.GetValue(null), Is.EqualTo(false));
     }
@@ -36,14 +36,14 @@ public sealed class ScaffoldSmokeTests
     }
 
     [Test]
-    public void Phase_two_claims_only_implemented_metadata_collectors_are_supported()
+    public void Phase_three_claims_only_implemented_metadata_collectors_are_supported()
     {
         var source = ReadRepoFile("src/CS2AssetPerformanceAuditor/GameIntegration/Capabilities/CapabilityProbe.cs");
         Assert.That(source, Does.Contain("CapabilityId.GeometryMetadata, CapabilityState.Supported"));
         Assert.That(source, Does.Contain("CapabilityId.SubmeshMetadata, CapabilityState.Supported"));
-        Assert.That(source, Does.Not.Contain("CapabilityId.SurfaceMetadata, CapabilityState.Supported"));
-        Assert.That(source, Does.Not.Contain("CapabilityId.TextureMetadata, CapabilityState.Supported"));
-        Assert.That(source, Does.Contain("collector_not_implemented_phase_2"));
+        Assert.That(source, Does.Contain("CapabilityId.SurfaceMetadata, CapabilityState.Supported"));
+        Assert.That(source, Does.Contain("CapabilityId.TextureMetadata, CapabilityState.Supported"));
+        Assert.That(source, Does.Contain("CapabilityId.RuntimeGpuResidency, CapabilityState.Unsupported"));
     }
 
     [Test]
@@ -53,6 +53,18 @@ public sealed class ScaffoldSmokeTests
         Assert.That(source, Does.Not.Contain("ObtainMeshes("));
         Assert.That(source, Does.Contain("GetVertexCount("));
         Assert.That(source, Does.Contain("GetSubMeshDesc("));
+    }
+
+    [Test]
+    public void Surface_and_texture_audit_stays_metadata_first()
+    {
+        var surface = ReadRepoFile("src/CS2AssetPerformanceAuditor/GameIntegration/Rendering/SurfaceAssetReader.cs");
+        var texture = ReadRepoFile("src/CS2AssetPerformanceAuditor/GameIntegration/Rendering/TextureAssetReader.cs");
+        Assert.That(surface, Does.Contain("LoadProperties(false)"));
+        Assert.That(surface, Does.Contain("UnloadProperties(false)"));
+        Assert.That(surface, Does.Not.Contain("GetTemplateMaterial("));
+        Assert.That(texture, Does.Not.Contain(".Load("));
+        Assert.That(texture, Does.Not.Contain("rawData"));
     }
 
     [Test]
@@ -96,8 +108,7 @@ public sealed class ScaffoldSmokeTests
     private static int CountOccurrences(string text, string value)
     {
         if (string.IsNullOrEmpty(value)) throw new ArgumentException("Search value is required.", nameof(value));
-        var count = 0;
-        var offset = 0;
+        var count = 0; var offset = 0;
         while ((offset = text.IndexOf(value, offset, StringComparison.Ordinal)) >= 0) { count++; offset += value.Length; }
         return count;
     }

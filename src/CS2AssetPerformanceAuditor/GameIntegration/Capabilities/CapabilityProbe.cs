@@ -26,8 +26,8 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Capabilities
                 ProbeIndependently(CapabilityId.NetworkEdgeCensus, () => ProbeNetworkEdgeCensus(world)),
                 new CapabilityStatus(CapabilityId.GeometryMetadata, CapabilityState.Supported, "geometry_metadata_reader_available"),
                 new CapabilityStatus(CapabilityId.SubmeshMetadata, CapabilityState.Supported, "topology_aware_submesh_reader_available"),
-                new CapabilityStatus(CapabilityId.SurfaceMetadata, CapabilityState.Unsupported, "collector_not_implemented_phase_2"),
-                new CapabilityStatus(CapabilityId.TextureMetadata, CapabilityState.Unsupported, "collector_not_implemented_phase_2"),
+                new CapabilityStatus(CapabilityId.SurfaceMetadata, CapabilityState.Supported, "surface_metadata_reader_available"),
+                new CapabilityStatus(CapabilityId.TextureMetadata, CapabilityState.Supported, "texture_metadata_reader_available"),
                 new CapabilityStatus(CapabilityId.ShaderDeepInspection, CapabilityState.Degraded, "deep_shader_inspection_not_implemented"),
                 new CapabilityStatus(CapabilityId.RuntimeGpuResidency, CapabilityState.Unsupported, "runtime_gpu_residency_is_out_of_scope")
             };
@@ -52,9 +52,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Capabilities
 
         private static CapabilityStatus ProbeNetworkEdgeCensus(World world)
         {
-            ProbeQuery(world,
-                new[] { ComponentType.ReadOnly<Game.Net.Edge>(), ComponentType.ReadOnly<PrefabRef>() },
-                null,
+            ProbeQuery(world, new[] { ComponentType.ReadOnly<Game.Net.Edge>(), ComponentType.ReadOnly<PrefabRef>() }, null,
                 new[] { ComponentType.ReadOnly<Temp>(), ComponentType.ReadOnly<Deleted>(), ComponentType.ReadOnly<Overridden>(), ComponentType.ReadOnly<Owner>(), ComponentType.ReadOnly<Controller>() });
             return new CapabilityStatus(CapabilityId.NetworkEdgeCensus, CapabilityState.Supported, "network_profile_v1_query_available");
         }

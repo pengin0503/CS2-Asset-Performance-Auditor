@@ -1,0 +1,11 @@
+namespace CS2AssetPerformanceAuditor.Core
+{
+    public static class ProjectInfo
+    {
+        public static string ProductName { get; } = "CS2 Asset Performance Auditor";
+
+        public static bool UsesHarmony { get; } = false;
+
+        public static string TargetGameVersion { get; } = "1.6.2f1";
+    }
+}

@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="$(CSII_TOOLPATH)/Mod.props" Condition="'$(CSII_TOOLPATH)' != '' and Exists('$(CSII_TOOLPATH)/Mod.props')" />
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <OutputType>Library</OutputType>
+    <RootNamespace>CS2AssetPerformanceAuditor</RootNamespace>
+    <AssemblyName>CS2AssetPerformanceAuditor</AssemblyName>
+    <Nullable>enable</Nullable>
+    <CSIIManagedPath Condition="'$(CSII_MANAGEDPATH)' != ''">$(CSII_MANAGEDPATH)</CSIIManagedPath>
+    <CSIIManagedPath Condition="'$(CSIIManagedPath)' == '' and '$(ManagedPath)' != ''">$(ManagedPath)</CSIIManagedPath>
+    <CSIIManagedPath Condition="'$(CSIIManagedPath)' == '' and Exists('$(CSII_TOOLPATH)/Game.dll')">$(CSII_TOOLPATH)</CSIIManagedPath>
+    <DefineConstants Condition="'$(CSIIManagedPath)' != '' and Exists('$(CSIIManagedPath)/Game.dll')">$(DefineConstants);CS2_GAME_API_AVAILABLE</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(OS)' != 'Windows_NT'">
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="All" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(CSIIManagedPath)' != '' and Exists('$(CSIIManagedPath)/Game.dll')">
+    <Reference Include="Game"><HintPath>$(CSIIManagedPath)/Game.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Colossal.Core"><HintPath>$(CSIIManagedPath)/Colossal.Core.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Colossal.Logging"><HintPath>$(CSIIManagedPath)/Colossal.Logging.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Colossal.UI"><HintPath>$(CSIIManagedPath)/Colossal.UI.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Colossal.UI.Binding"><HintPath>$(CSIIManagedPath)/Colossal.UI.Binding.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Colossal.IO.AssetDatabase"><HintPath>$(CSIIManagedPath)/Colossal.IO.AssetDatabase.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Colossal.Localization"><HintPath>$(CSIIManagedPath)/Colossal.Localization.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Colossal.PSI.Common"><HintPath>$(CSIIManagedPath)/Colossal.PSI.Common.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.Collections"><HintPath>$(CSIIManagedPath)/Unity.Collections.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.Burst"><HintPath>$(CSIIManagedPath)/Unity.Burst.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.Mathematics"><HintPath>$(CSIIManagedPath)/Unity.Mathematics.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.Profiling.Core"><HintPath>$(CSIIManagedPath)/Unity.Profiling.Core.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.CoreModule"><HintPath>$(CSIIManagedPath)/UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.PerformanceReportingModule"><HintPath>$(CSIIManagedPath)/UnityEngine.PerformanceReportingModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.Entities"><HintPath>$(CSIIManagedPath)/Unity.Entities.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+  <Import Project="$(CSII_TOOLPATH)/Mod.targets" Condition="'$(CSII_TOOLPATH)' != '' and Exists('$(CSII_TOOLPATH)/Mod.targets')" />
+</Project>

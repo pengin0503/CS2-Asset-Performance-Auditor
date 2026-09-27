@@ -1,1 +1,9 @@
 .worktrees/
+**/bin/
+**/obj/
+**/node_modules/
+UI/dist/
+.vs/
+*.user
+*.suo
+local-game-references/

@@ -22,6 +22,7 @@ namespace CS2AssetPerformanceAuditor.UI
         [DataMember(Name = "assetPage", Order = 3)] public UiAssetPage AssetPage { get; set; } = new UiAssetPage();
         [DataMember(Name = "settings", Order = 4)] public UiScanOptions Settings { get; set; } = new UiScanOptions();
         [DataMember(Name = "findings", Order = 5)] public UiFinding[] Findings { get; set; } = new UiFinding[0];
+        [DataMember(Name = "diagnostics", Order = 6)] public UiDiagnostics Diagnostics { get; set; } = new UiDiagnostics();
     }
 
     [DataContract]
@@ -143,6 +144,41 @@ namespace CS2AssetPerformanceAuditor.UI
         [DataMember(Name = "ruleVersion", Order = 8)] public string RuleVersion { get; set; } = string.Empty;
         [DataMember(Name = "prefabId", Order = 9, EmitDefaultValue = true)] public string? PrefabId { get; set; }
         [DataMember(Name = "prefabType", Order = 10, EmitDefaultValue = true)] public string? PrefabType { get; set; }
+    }
+
+    [DataContract]
+    public sealed class UiDiagnostics
+    {
+        [DataMember(Name = "harmony", Order = 1)] public string Harmony { get; set; } = "not used";
+        [DataMember(Name = "lastScanState", Order = 2)] public string LastScanState { get; set; } = "Idle";
+        [DataMember(Name = "lastDiagnosticCode", Order = 3, EmitDefaultValue = true)] public string? LastDiagnosticCode { get; set; }
+        [DataMember(Name = "catalogUnresolvedCount", Order = 4)] public int CatalogUnresolvedCount { get; set; }
+        [DataMember(Name = "unmatchedPrefabReferenceCount", Order = 5)] public int UnmatchedPrefabReferenceCount { get; set; }
+        [DataMember(Name = "diagnosticDistinctCount", Order = 6)] public int DiagnosticDistinctCount { get; set; }
+        [DataMember(Name = "diagnosticOccurrenceCount", Order = 7)] public long DiagnosticOccurrenceCount { get; set; }
+        [DataMember(Name = "telemetry", Order = 8, EmitDefaultValue = true)] public UiScanTelemetry? Telemetry { get; set; }
+        [DataMember(Name = "aggregatedDiagnostics", Order = 9)] public UiDiagnosticEntry[] AggregatedDiagnostics { get; set; } = new UiDiagnosticEntry[0];
+    }
+
+    [DataContract]
+    public sealed class UiScanTelemetry
+    {
+        [DataMember(Name = "elapsedMilliseconds", Order = 1)] public double ElapsedMilliseconds { get; set; }
+        [DataMember(Name = "processedItems", Order = 2)] public long ProcessedItems { get; set; }
+        [DataMember(Name = "sliceCount", Order = 3)] public long SliceCount { get; set; }
+        [DataMember(Name = "sampleCount", Order = 4)] public int SampleCount { get; set; }
+        [DataMember(Name = "maxSliceMilliseconds", Order = 5)] public double MaxSliceMilliseconds { get; set; }
+        [DataMember(Name = "p95SliceMilliseconds", Order = 6)] public double P95SliceMilliseconds { get; set; }
+    }
+
+    [DataContract]
+    public sealed class UiDiagnosticEntry
+    {
+        [DataMember(Name = "code", Order = 1)] public string Code { get; set; } = string.Empty;
+        [DataMember(Name = "message", Order = 2)] public string Message { get; set; } = string.Empty;
+        [DataMember(Name = "count", Order = 3)] public int Count { get; set; }
+        [DataMember(Name = "firstSeenAt", Order = 4)] public string FirstSeenAt { get; set; } = string.Empty;
+        [DataMember(Name = "lastSeenAt", Order = 5)] public string LastSeenAt { get; set; } = string.Empty;
     }
 
     [DataContract]

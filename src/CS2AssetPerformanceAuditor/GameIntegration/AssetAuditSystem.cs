@@ -1,7 +1,10 @@
+using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using CS2AssetPerformanceAuditor.Core.Capabilities;
 using CS2AssetPerformanceAuditor.Core.Census;
+using CS2AssetPerformanceAuditor.Core.Diagnostics;
 using CS2AssetPerformanceAuditor.Core.Prefabs;
 using CS2AssetPerformanceAuditor.Core.Scanning;
 using CS2AssetPerformanceAuditor.GameIntegration.Capabilities;
@@ -22,6 +25,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
         private CensusAccess? _censusAccess;
         private readonly PublishedAuditState _publishedState = new PublishedAuditState();
         private CensusReducer? _censusReducer;
+        private ScanTelemetry? _scanTelemetry;
         private bool _catalogScanRequested;
         private bool _catalogCaptureActive;
         private bool _censusScanRequested;
@@ -32,34 +36,20 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
         private ScanOptions _requestedOptions = ScanOptions.Default;
 
         public CapabilityReport? Capabilities { get; private set; }
-
         public long WorldGeneration { get; private set; }
-
         public long CatalogGeneration => _catalog?.CatalogGeneration ?? 0;
-
-        public System.DateTimeOffset CatalogCapturedAt => _catalog?.CatalogCapturedAt ?? System.DateTimeOffset.MinValue;
-
-        public IReadOnlyList<PrefabRecord> CatalogRecords => _catalog?.PublishedRecords ?? System.Array.Empty<PrefabRecord>();
-
+        public DateTimeOffset CatalogCapturedAt => _catalog?.CatalogCapturedAt ?? DateTimeOffset.MinValue;
+        public IReadOnlyList<PrefabRecord> CatalogRecords => _catalog?.PublishedRecords ?? Array.Empty<PrefabRecord>();
         public int CatalogCapturedEntityCount => _catalog?.CapturedEntityCount ?? 0;
-
         public int CatalogProcessedEntityCount => _catalog?.ProcessedEntityCount ?? 0;
-
         public int CatalogUnresolvedEntityCount => _catalog?.UnresolvedEntityCount ?? 0;
-
-        public IReadOnlyDictionary<Entity, PrefabKey> RuntimeEntityKeys => _catalog?.RuntimeEntityKeys
-            ?? new Dictionary<Entity, PrefabKey>();
-
+        public IReadOnlyDictionary<Entity, PrefabKey> RuntimeEntityKeys => _catalog?.RuntimeEntityKeys ?? new Dictionary<Entity, PrefabKey>();
         public ScanSession? CurrentScan { get; private set; }
-
-        public bool IsCensusScanActive => CurrentScan != null
-            && (CurrentScan.State == ScanState.Running || CurrentScan.State == ScanState.CancellationRequested);
-
+        public bool IsCensusScanActive => CurrentScan != null && (CurrentScan.State == ScanState.Running || CurrentScan.State == ScanState.CancellationRequested);
         public CensusSnapshot? PublishedCensus => _publishedState.Census;
-
         public string? LastDiagnosticCode { get; private set; }
-
         public int UnmatchedPrefabReferenceCount => _censusAccess?.UnmatchedPrefabReferenceCount ?? 0;
+        public ScanTelemetrySnapshot? TelemetrySnapshot => _scanTelemetry?.Snapshot(DateTimeOffset.UtcNow);
 
         public void RequestCatalogScan()
         {
@@ -98,31 +88,26 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
                 PollCensusCleanup();
                 return;
             }
-
             if (CurrentScan?.State == ScanState.CancellationRequested)
             {
                 BeginCensusCancellation();
                 return;
             }
-
             if (_censusScanRequested && !IsCensusScanActive && !_catalogCaptureActive)
             {
                 StartCensusScan();
                 return;
             }
-
             if (_catalogScanRequested && !_catalogCaptureActive)
             {
                 StartCatalogCapture();
                 return;
             }
-
             if (_catalogCaptureActive)
             {
                 ProcessCatalogCapture();
                 return;
             }
-
             if (IsCensusScanActive)
                 AdvanceCensusScan();
         }
@@ -144,7 +129,9 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
             _censusScanRequested = false;
             LastDiagnosticCode = null;
             _catalogGenerationAtCensusStart = CatalogGeneration;
-            CurrentScan = ScanSession.Start(ScanKind.Census, WorldGeneration, System.DateTimeOffset.UtcNow);
+            var startedAt = DateTimeOffset.UtcNow;
+            _scanTelemetry = new ScanTelemetry(startedAt);
+            CurrentScan = ScanSession.Start(ScanKind.Census, WorldGeneration, startedAt);
             CurrentScan.TransitionTo(ScanStage.CapturingCatalog);
             _catalogScanRequested = true;
         }
@@ -154,10 +141,8 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
             _catalogScanRequested = false;
             if (_catalog == null)
                 return;
-
             _catalogGenerationBeforeCapture = _catalog.CatalogGeneration;
-            var deferPublication = CurrentScan?.State == ScanState.Running
-                && CurrentScan.Stage == ScanStage.CapturingCatalog;
+            var deferPublication = CurrentScan?.State == ScanState.Running && CurrentScan.Stage == ScanStage.CapturingCatalog;
             try
             {
                 _catalog.BeginCapture(deferPublication);
@@ -182,7 +167,11 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
 
             if (_catalog.IsWorking)
             {
+                var before = _catalog.ProcessedEntityCount;
+                var stopwatch = Stopwatch.StartNew();
                 _catalog.ProcessNextSlice(CatalogSliceSize);
+                stopwatch.Stop();
+                RecordManagedSlice(stopwatch.Elapsed, Math.Max(0, _catalog.ProcessedEntityCount - before));
                 if (CurrentScan?.Stage == ScanStage.ProcessingCatalog && CurrentScan.State == ScanState.Running)
                     ReportExactProgress(CurrentScan, _catalog.ProcessedEntityCount, _catalog.CapturedEntityCount);
                 return;
@@ -198,7 +187,6 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
                     FailCensusScan("APA-CAT-002", CapabilityId.PrefabCatalog, "catalog_capture_not_staged");
                     return;
                 }
-
                 CurrentScan.TransitionTo(ScanStage.ProcessingCatalog);
                 return;
             }
@@ -228,12 +216,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
                             FailCensusScan("APA-CAT-003", CapabilityId.PrefabCatalog, "catalog_generation_did_not_advance");
                             return;
                         }
-                        _censusReducer = new CensusReducer(
-                            catalog.PendingRecords,
-                            WorldGeneration,
-                            catalog.PendingCatalogGeneration,
-                            System.DateTimeOffset.UtcNow,
-                            _requestedOptions);
+                        _censusReducer = new CensusReducer(catalog.PendingRecords, WorldGeneration, catalog.PendingCatalogGeneration, DateTimeOffset.UtcNow, _requestedOptions);
                         session.TransitionTo(ScanStage.CapturingObjectCensus);
                         census.BeginObjectCapture(catalog.PendingRuntimeEntityKeys, _censusReducer, _requestedOptions);
                         return;
@@ -247,7 +230,11 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
                         return;
 
                     case ScanStage.ReducingObjectCensus:
+                        var objectBefore = census.ProcessedObjectReferenceCount;
+                        var objectStopwatch = Stopwatch.StartNew();
                         census.ReduceObjectSlice(CensusReductionSliceSize);
+                        objectStopwatch.Stop();
+                        RecordManagedSlice(objectStopwatch.Elapsed, Math.Max(0, census.ProcessedObjectReferenceCount - objectBefore));
                         ReportExactProgress(session, census.ProcessedObjectReferenceCount, census.CapturedObjectReferenceCount);
                         if (!census.ObjectReductionCompleted)
                             return;
@@ -271,7 +258,11 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
                         return;
 
                     case ScanStage.ReducingNetworkCensus:
+                        var networkBefore = census.ProcessedNetworkEdgeCount;
+                        var networkStopwatch = Stopwatch.StartNew();
                         census.ReduceNetworkSlice(CensusReductionSliceSize);
+                        networkStopwatch.Stop();
+                        RecordManagedSlice(networkStopwatch.Elapsed, Math.Max(0, census.ProcessedNetworkEdgeCount - networkBefore));
                         ReportExactProgress(session, census.ProcessedNetworkEdgeCount, census.CapturedNetworkEdgeCount);
                         if (!census.NetworkReductionCompleted)
                             return;
@@ -282,8 +273,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
             }
             catch
             {
-                var failedCapability = session.Stage == ScanStage.CapturingNetworkCensus
-                    || session.Stage == ScanStage.ReducingNetworkCensus
+                var failedCapability = session.Stage == ScanStage.CapturingNetworkCensus || session.Stage == ScanStage.ReducingNetworkCensus
                     ? CapabilityId.NetworkEdgeCensus
                     : CapabilityId.ObjectCensus;
                 var diagnostic = failedCapability == CapabilityId.NetworkEdgeCensus ? "APA-CEN-002" : "APA-CEN-001";
@@ -294,10 +284,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
         private void PublishCensus(ScanSession session, CensusAccess census)
         {
             var catalog = _catalog;
-            if (catalog == null
-                || !catalog.HasPendingPublication
-                || WorldGeneration != session.WorldGeneration
-                || _publishedState.WorldGeneration != session.WorldGeneration)
+            if (catalog == null || !catalog.HasPendingPublication || WorldGeneration != session.WorldGeneration || _publishedState.WorldGeneration != session.WorldGeneration)
             {
                 FailCensusScan("APA-CEN-003", CapabilityId.ObjectCensus, "world_generation_changed_before_publish");
                 return;
@@ -350,7 +337,6 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
                 _catalog?.CancelCapture();
                 _catalogCaptureActive = false;
             }
-
             if (CurrentScan?.State == ScanState.Running || CurrentScan?.State == ScanState.CancellationRequested)
                 CurrentScan.Fail(diagnosticCode);
             _censusAccess?.RequestCancellation();
@@ -367,13 +353,17 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
             }
             if (_censusAccess.CleanupPending)
                 return;
-
             _censusAccess.CompleteCleanup();
             _censusCleanupRequested = false;
             _censusReducer = null;
             _networkCaptureStarted = false;
             if (CurrentScan?.State == ScanState.CancellationRequested)
                 CurrentScan.MarkCancelled();
+        }
+
+        private void RecordManagedSlice(TimeSpan elapsed, long processedItems)
+        {
+            _scanTelemetry?.RecordManagedSlice(elapsed, processedItems);
         }
 
         private static void ReportExactProgress(ScanSession session, long completed, long total)
@@ -388,7 +378,6 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
         {
             if (Capabilities == null)
                 return;
-
             var statuses = new List<CapabilityStatus>();
             var found = false;
             foreach (var status in Capabilities.Capabilities)

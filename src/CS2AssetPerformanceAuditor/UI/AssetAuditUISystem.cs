@@ -27,6 +27,7 @@ namespace CS2AssetPerformanceAuditor.UI
         private CensusSnapshot? _lastCensus;
         private long _lastCatalogGeneration = -1;
         private AssetQuery _assetQuery = new AssetQuery();
+        private AssetPage _assetPage = new AssetPage(Array.Empty<AssetPageItem>(), 0, 0, 100);
         private UiScanOptions _uiSettings = new UiScanOptions();
         private string? _lastSnapshotJson;
         private DateTimeOffset _lastPublishedAt;
@@ -185,6 +186,7 @@ namespace CS2AssetPerformanceAuditor.UI
                 return;
             var auditSystem = GetAuditSystem();
             var snapshot = _snapshotBuilder.Build(auditSystem, _assetPage, _uiSettings, ProjectInfo.ModVersion);
+            snapshot.Diagnostics = CreateDiagnostics(auditSystem);
             var json = UiSnapshotBuilder.Serialize(snapshot);
             var publishInterval = TimeSpan.FromMilliseconds(_uiSettings.ProgressUpdateMs);
             if (!force && StringComparer.Ordinal.Equals(json, _lastSnapshotJson))
@@ -194,6 +196,38 @@ namespace CS2AssetPerformanceAuditor.UI
             _snapshotBinding.Update(json);
             _lastSnapshotJson = json;
             _lastPublishedAt = DateTimeOffset.UtcNow;
+        }
+
+        private UiDiagnostics CreateDiagnostics(AssetAuditSystem? auditSystem)
+        {
+            var telemetry = auditSystem?.TelemetrySnapshot;
+            return new UiDiagnostics
+            {
+                Harmony = "not used",
+                LastScanState = auditSystem?.CurrentScan?.State.ToString() ?? "Idle",
+                LastDiagnosticCode = auditSystem?.LastDiagnosticCode,
+                CatalogUnresolvedCount = auditSystem?.CatalogUnresolvedEntityCount ?? 0,
+                UnmatchedPrefabReferenceCount = auditSystem?.UnmatchedPrefabReferenceCount ?? 0,
+                DiagnosticDistinctCount = _diagnostics.DistinctCount,
+                DiagnosticOccurrenceCount = _diagnostics.OccurrenceCount,
+                Telemetry = telemetry == null ? null : new UiScanTelemetry
+                {
+                    ElapsedMilliseconds = telemetry.ElapsedMilliseconds,
+                    ProcessedItems = telemetry.ProcessedItems,
+                    SliceCount = telemetry.SliceCount,
+                    SampleCount = telemetry.SampleCount,
+                    MaxSliceMilliseconds = telemetry.MaxSliceMilliseconds,
+                    P95SliceMilliseconds = telemetry.P95SliceMilliseconds
+                },
+                AggregatedDiagnostics = _diagnostics.Snapshot().Select(item => new UiDiagnosticEntry
+                {
+                    Code = item.Code.Value,
+                    Message = item.Message,
+                    Count = item.Count,
+                    FirstSeenAt = FormatTime(item.FirstSeenAt),
+                    LastSeenAt = FormatTime(item.LastSeenAt)
+                }).ToArray()
+            };
         }
 
         private static AssetQuery CreateAssetQuery(UiAssetQueryRequest request)
@@ -260,5 +294,7 @@ namespace CS2AssetPerformanceAuditor.UI
                 return null;
             return parsed;
         }
+
+        private static string FormatTime(DateTimeOffset value) => value.ToUniversalTime().ToString("O");
     }
 }

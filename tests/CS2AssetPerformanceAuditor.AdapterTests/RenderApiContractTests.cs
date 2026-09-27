@@ -9,6 +9,7 @@ namespace CS2AssetPerformanceAuditor.AdapterTests
     [TestFixture]
     public sealed class RenderApiContractTests
     {
+        private const BindingFlags PublicInstance = BindingFlags.Public | BindingFlags.Instance;
         private MetadataLoadContext? _metadata;
         private string[] _assemblyPaths = Array.Empty<string>();
 
@@ -46,6 +47,24 @@ namespace CS2AssetPerformanceAuditor.AdapterTests
             Assert.That(objectGeometry.GetField("m_Meshes", flags)?.FieldType.GetElementType()?.FullName, Is.EqualTo("Game.Prefabs.ObjectMeshInfo"));
             Assert.That(objectMeshInfo.GetField("m_Mesh", flags)?.FieldType.FullName, Is.EqualTo("Game.Prefabs.RenderPrefabBase"));
             Assert.That(lodProperties.GetField("m_LodMeshes", flags)?.FieldType.GetElementType()?.FullName, Is.EqualTo("Game.Prefabs.RenderPrefab"));
+        }
+
+        [Test]
+        public void Deep_inspection_material_acquisition_is_public_and_paired()
+        {
+            var renderPrefab = GameType("Game.Prefabs.RenderPrefab");
+            var obtain = renderPrefab.GetMethods(PublicInstance)
+                .FirstOrDefault(method => method.Name == "ObtainMaterials"
+                    && method.GetParameters().Length == 1
+                    && method.GetParameters()[0].ParameterType.FullName == "System.Boolean");
+            var release = renderPrefab.GetMethods(PublicInstance)
+                .FirstOrDefault(method => method.Name == "ReleaseMaterials" && method.GetParameters().Length == 0);
+
+            Assert.That(obtain, Is.Not.Null, "RenderPrefab.ObtainMaterials(bool) must remain public for selected-asset Deep Inspection.");
+            Assert.That(obtain!.ReturnType.IsArray, Is.True);
+            Assert.That(obtain.ReturnType.GetElementType()?.FullName, Is.EqualTo("UnityEngine.Material"));
+            Assert.That(release, Is.Not.Null, "RenderPrefab.ReleaseMaterials() must remain public and paired with ObtainMaterials.");
+            Assert.That(release!.ReturnType.FullName, Is.EqualTo("System.Void"));
         }
 
         private Type GameType(string fullName)

@@ -5,9 +5,11 @@ using System.Linq;
 using System.Runtime.Serialization.Json;
 using System.Text;
 using CS2AssetPerformanceAuditor.Core.Census;
+using CS2AssetPerformanceAuditor.Core.Findings;
 using CS2AssetPerformanceAuditor.Core.Observations;
 using CS2AssetPerformanceAuditor.Core.Prefabs;
 using CS2AssetPerformanceAuditor.Core.Query;
+using CS2AssetPerformanceAuditor.Core.Rendering;
 using CS2AssetPerformanceAuditor.Core.Scanning;
 using CS2AssetPerformanceAuditor.GameIntegration;
 
@@ -45,6 +47,12 @@ namespace CS2AssetPerformanceAuditor.UI
             var catalog = auditSystem?.CatalogRecords ?? Array.Empty<PrefabRecord>();
             var catalogGeneration = auditSystem?.CatalogGeneration ?? 0;
             var catalogCapturedAt = auditSystem != null && catalogGeneration > 0 ? FormatTime(auditSystem.CatalogCapturedAt) : null;
+            var publishedAnalysis = auditSystem?.PublishedAnalysis;
+            var analysis = publishedAnalysis != null
+                && publishedAnalysis.WorldGeneration == auditSystem?.WorldGeneration
+                && publishedAnalysis.CatalogGeneration == catalogGeneration
+                ? publishedAnalysis
+                : null;
 
             return new UiSnapshot
             {
@@ -78,9 +86,9 @@ namespace CS2AssetPerformanceAuditor.UI
                     QueryProfileVersion = census?.QueryProfileVersion,
                     CensusCounts = GetCensusCounts(census)
                 },
-                AssetPage = MapPage(assetPage),
+                AssetPage = MapPage(assetPage, analysis),
                 Settings = CopySettings(settings),
-                Findings = new UiFinding[0]
+                Findings = MapFindings(analysis)
             };
         }
 
@@ -137,35 +145,76 @@ namespace CS2AssetPerformanceAuditor.UI
             NetworkEdges = entry == null ? Unscanned() : MapObservation(entry.Counters.NetworkEdges)
         };
 
-        private static UiAssetPage MapPage(AssetPage page)
+        private static UiAssetPage MapPage(AssetPage page, AssetAnalysisSnapshot? analysis)
         {
             return new UiAssetPage
             {
                 Offset = page.Offset,
                 Limit = page.Limit,
                 TotalCount = page.TotalCount,
-                Items = page.Items.Select(item => new UiAssetRow
-                {
-                    PrefabId = item.Asset.Key.PrefabId,
-                    PrefabType = item.Asset.Key.PrefabType,
-                    DisplayName = item.Asset.DisplayName,
-                    SourceLabel = GetSourceLabel(item.Asset.OriginEvidence),
-                    Traits = item.Asset.Traits.ToString().Split(new[] { ", " }, StringSplitOptions.RemoveEmptyEntries),
-                    CountKind = item.CountKind.ToString(),
-                    Instances = MapObservation(item.Instances),
-                    Presence = item.Presence.ToString(),
-                    Counters = MapCounters(item.CensusEntry),
-                    RenderCoverage = Availability.NotScanned.ToString(),
-                    EstimatedTexturePayload = Unscanned(),
-                    FindingCount = 0,
-                    Lod0Vertices = Unscanned(),
-                    Lod1RetentionPercent = new UiDoubleObservation { Availability = Availability.NotScanned.ToString(), Origin = ObservationOrigin.Derived.ToString() },
-                    MaterialCount = Unscanned(),
-                    UniqueTextureCount = Unscanned(),
-                    RenderRelations = new UiRenderRelation[0]
-                }).ToArray()
+                Items = page.Items.Select(item => MapAssetRow(item, analysis)).ToArray()
             };
         }
+
+        private static UiAssetRow MapAssetRow(AssetPageItem item, AssetAnalysisSnapshot? analysis)
+        {
+            PrefabAnalysisEntry? entry = null;
+            if (analysis != null)
+                analysis.TryGetPrefab(item.Asset.Key, out entry!);
+
+            return new UiAssetRow
+            {
+                PrefabId = item.Asset.Key.PrefabId,
+                PrefabType = item.Asset.Key.PrefabType,
+                DisplayName = item.Asset.DisplayName,
+                SourceLabel = GetSourceLabel(item.Asset.OriginEvidence),
+                Traits = item.Asset.Traits.ToString().Split(new[] { ", " }, StringSplitOptions.RemoveEmptyEntries),
+                CountKind = item.CountKind.ToString(),
+                Instances = MapObservation(item.Instances),
+                Presence = item.Presence.ToString(),
+                Counters = MapCounters(item.CensusEntry),
+                RenderCoverage = entry?.RenderCoverage.ToString() ?? Availability.NotScanned.ToString(),
+                EstimatedTexturePayload = entry == null ? Unscanned() : MapObservation(entry.EstimatedTexturePayload),
+                FindingCount = entry?.Findings.Count ?? 0,
+                Lod0Vertices = entry == null ? Unscanned() : MapObservation(entry.Lod0Vertices),
+                Lod1RetentionPercent = entry == null ? UnscannedDouble() : MapObservation(entry.Lod1RetentionPercent),
+                MaterialCount = entry == null ? Unscanned() : MapObservation(entry.MaterialCount),
+                UniqueTextureCount = entry == null ? Unscanned() : MapObservation(entry.UniqueTextureCount),
+                RenderRelations = entry?.Relations.Select(relation => new UiRenderRelation
+                {
+                    Kind = relation.RelationKind.ToString(),
+                    From = FormatPrefabKey(relation.PrefabKey),
+                    To = FormatRenderKey(relation.RenderAssetKey),
+                    LodLevel = relation.LodLevel
+                }).ToArray() ?? new UiRenderRelation[0]
+            };
+        }
+
+        private static UiFinding[] MapFindings(AssetAnalysisSnapshot? analysis)
+        {
+            if (analysis == null)
+                return new UiFinding[0];
+            return analysis.Prefabs
+                .SelectMany(entry => entry.Findings.Select(finding => MapFinding(finding, entry.Key)))
+                .OrderBy(finding => finding.Status, StringComparer.Ordinal)
+                .ThenBy(finding => finding.RuleId, StringComparer.Ordinal)
+                .ThenBy(finding => finding.PrefabId, StringComparer.Ordinal)
+                .ToArray();
+        }
+
+        private static UiFinding MapFinding(Finding finding, PrefabKey key) => new UiFinding
+        {
+            RuleId = finding.RuleId,
+            Status = finding.Status.ToString(),
+            Category = finding.Category.ToString(),
+            Title = finding.Title,
+            Explanation = finding.Explanation,
+            Evidence = finding.Evidence.ToArray(),
+            Basis = finding.Basis.ToString(),
+            RuleVersion = finding.RuleVersion,
+            PrefabId = key.PrefabId,
+            PrefabType = key.PrefabType
+        };
 
         private static UiObservation Aggregate(CensusSnapshot? census, Func<CensusEntry, Observation<long>> select)
         {
@@ -197,7 +246,17 @@ namespace CS2AssetPerformanceAuditor.UI
             DiagnosticCode = observation.DiagnosticCode
         };
 
+        private static UiDoubleObservation MapObservation(Observation<double> observation) => new UiDoubleObservation
+        {
+            Availability = observation.Availability.ToString(),
+            Value = observation.HasValue ? observation.Value : (double?)null,
+            Origin = observation.Origin.ToString(),
+            CapturedAt = FormatTime(observation.CapturedAt),
+            DiagnosticCode = observation.DiagnosticCode
+        };
+
         private static UiObservation Unscanned() => new UiObservation { Availability = Availability.NotScanned.ToString(), Origin = ObservationOrigin.Derived.ToString() };
+        private static UiDoubleObservation UnscannedDouble() => new UiDoubleObservation { Availability = Availability.NotScanned.ToString(), Origin = ObservationOrigin.Derived.ToString() };
 
         private static UiScanOptions CopySettings(UiScanOptions settings) => new UiScanOptions
         {
@@ -227,6 +286,8 @@ namespace CS2AssetPerformanceAuditor.UI
             return "Unknown";
         }
 
+        private static string FormatPrefabKey(PrefabKey key) => key.PrefabType + ":" + key.PrefabId;
+        private static string FormatRenderKey(RenderAssetKey key) => key.RenderAssetType + ":" + key.RenderAssetId;
         private static string FormatTime(DateTimeOffset value) => value.ToUniversalTime().ToString("O");
 
         private static string FormatStage(ScanStage stage)
@@ -240,6 +301,11 @@ namespace CS2AssetPerformanceAuditor.UI
                 case ScanStage.ReducingObjectCensus: return "Reducing object census";
                 case ScanStage.CapturingNetworkCensus: return "Capturing network census";
                 case ScanStage.ReducingNetworkCensus: return "Reducing network census";
+                case ScanStage.ResolvingRenderGraph: return "Resolving render graph";
+                case ScanStage.CollectingGeometry: return "Collecting geometry metadata";
+                case ScanStage.CollectingSurfaceTexture: return "Collecting surface and texture metadata";
+                case ScanStage.EvaluatingFindings: return "Evaluating findings";
+                case ScanStage.DeepInspecting: return "Deep inspecting selected asset";
                 case ScanStage.Finalizing: return "Finalizing";
                 case ScanStage.Completed: return "Complete";
                 default: return "Idle";

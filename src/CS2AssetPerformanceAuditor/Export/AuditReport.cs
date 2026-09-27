@@ -185,6 +185,9 @@ namespace CS2AssetPerformanceAuditor.Export
         [DataMember(Name = "evidence", Order = 6)] public string[] Evidence { get; set; } = new string[0];
         [DataMember(Name = "basis", Order = 7)] public string Basis { get; set; } = string.Empty;
         [DataMember(Name = "ruleVersion", Order = 8)] public string RuleVersion { get; set; } = string.Empty;
+        // The Prefab that owns this finding; null only for findings supplied without an owning analysis entry.
+        [DataMember(Name = "prefabId", Order = 9, EmitDefaultValue = true)] public string? PrefabId { get; set; }
+        [DataMember(Name = "prefabType", Order = 10, EmitDefaultValue = true)] public string? PrefabType { get; set; }
     }
 
     [DataContract] public sealed class ReportCapabilityReport

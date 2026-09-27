@@ -1122,6 +1122,8 @@ Subsystem-scoped codes use a stable pattern such as:
 - `APA-SRF-###`
 - `APA-TEX-###`
 - `APA-EXP-###`
+- `APA-AUD-###` (Asset Audit scan)
+- `APA-DEEP-###` (selected-asset Deep Inspection)
 
 The UI shows a concise message and code; logs may contain technical exception details and context.
 

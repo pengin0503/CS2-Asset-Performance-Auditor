@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { bindValue, trigger, useValue } from "cs2/api";
 import {
   DEFAULT_ASSET_QUERY_STATE,
@@ -22,7 +23,9 @@ const snapshotBinding = bindValue<string>(UI_BINDING_GROUP, "snapshot", "{}");
 const exportedReportBinding = bindValue<string>(UI_BINDING_GROUP, "exportedReport", "");
 
 export function useAuditorSnapshot(): UiSnapshot {
-  return parseSnapshot(useValue(snapshotBinding));
+  const raw = useValue(snapshotBinding);
+  // Parse once per published binding value so unchanged snapshots keep stable object identity across renders.
+  return useMemo(() => parseSnapshot(raw), [raw]);
 }
 
 export function useExportedReport(): string {
@@ -133,7 +136,7 @@ export function createEscapeCloseHandler(onClose: () => void) {
   };
 }
 
-function parseSnapshot(raw: string): UiSnapshot {
+export function parseSnapshot(raw: string): UiSnapshot {
   try {
     const value: unknown = JSON.parse(raw);
     if (value && typeof value === "object" && "scanStatus" in value) {

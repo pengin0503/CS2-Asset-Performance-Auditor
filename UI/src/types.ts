@@ -18,7 +18,7 @@ export type CensusPresence =
   | "NotApplicable"
   | "Unknown";
 
-export type FindingStatus = "Warning" | "PotentialIssue" | "Notice" | "Observed";
+export type FindingStatus = "Warning" | "PotentialIssue" | "Notice" | "Observed" | "Unknown";
 export type FindingCategory = "Geometry" | "Lod" | "Material" | "Texture" | "Exposure" | "Integrity";
 export type RenderCoverage = Availability | "Unknown";
 export type ExportFormat = "Json" | "Csv";

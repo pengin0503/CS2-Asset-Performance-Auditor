@@ -44,6 +44,12 @@ describe("analysis findings UX", () => {
     expect(html).toContain("1.0");
   });
 
+  it("labels Unknown findings as Unknown rather than Observed", () => {
+    const html = renderToStaticMarkup(<FindingBadge finding={{ ...finding, ruleId: "APA-TEX-001", status: "Unknown" }} />);
+    expect(html).toContain(">Unknown<");
+    expect(html).not.toContain("Observed");
+  });
+
   it("unsupported render coverage is not rendered as zero geometry", () => {
     const html = renderToStaticMarkup(<RenderStructure coverage="Unsupported" relations={[]} />);
     expect(html).toContain("Unsupported");

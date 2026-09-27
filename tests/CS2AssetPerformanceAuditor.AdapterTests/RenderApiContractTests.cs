@@ -29,7 +29,7 @@ namespace CS2AssetPerformanceAuditor.AdapterTests
                 if (!string.IsNullOrWhiteSpace(runtimePath) && Directory.Exists(runtimePath)) _assemblyPaths = _assemblyPaths.Concat(Directory.GetFiles(runtimePath, "*.dll")).ToArray();
             }
             var platformPaths = ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") ?? string.Empty)
-                .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+                .Split(new[] { Path.PathSeparator }, StringSplitOptions.RemoveEmptyEntries)
                 .Where(path => !Path.GetFileName(path).Equals("mscorlib.dll", StringComparison.OrdinalIgnoreCase));
             _metadata = new MetadataLoadContext(new PathAssemblyResolver(_assemblyPaths.Concat(platformPaths)), "mscorlib");
         }

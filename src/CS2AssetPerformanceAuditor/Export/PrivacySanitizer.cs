@@ -7,7 +7,9 @@ namespace CS2AssetPerformanceAuditor.Export
     {
         private static readonly Regex UncPath = new Regex(@"\\\\[^\\/\s]+(?:\\[^\\/\r\n,;<>\""|]+)*", RegexOptions.Compiled | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
         private static readonly Regex WindowsPath = new Regex(@"(?i)\b[A-Z]:\\(?:[^\\/:*?\""<>|\r\n]+\\)*[^\\/:*?\""<>|\r\n]*", RegexOptions.Compiled | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
-        private static readonly Regex UnixPath = new Regex(@"(?<![\p{L}\p{N}_])/(?:[^\\\r\n,;<>\""|]+)", RegexOptions.Compiled | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+        // An absolute Unix path: a slash that does not continue a word, URL scheme, or relative path, followed
+        // directly by a segment and at least one further separator ("/home/user/..."). A lone " / " or "a/b" is text.
+        private static readonly Regex UnixPath = new Regex(@"(?<![\p{L}\p{N}_.:/\\-])/(?=[^\s/\\])(?:[^/\\\r\n,;<>\""|]+/)+[^\\\r\n,;<>\""|]*", RegexOptions.Compiled | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
 
         private readonly string? _userName;
         private readonly string? _machineName;

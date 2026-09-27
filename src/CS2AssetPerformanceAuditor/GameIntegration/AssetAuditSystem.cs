@@ -45,8 +45,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
         private RenderAssetKey _requestedDeepInspectionKey;
         private RenderAssetKey _activeDeepInspectionKey;
         private double _assetAuditFrameBudgetMs = 1.0;
-        private long _catalogGenerationBeforeCapture;
-        private long _catalogGenerationAtCensusStart;
+        private long _completedCatalogCapturesBeforeCapture;
         private long _nextAnalysisGeneration;
         private ScanOptions _requestedOptions = ScanOptions.Default;
 
@@ -209,7 +208,6 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
         {
             _censusScanRequested = false;
             LastDiagnosticCode = null;
-            _catalogGenerationAtCensusStart = CatalogGeneration;
             var startedAt = DateTimeOffset.UtcNow;
             _scanTelemetry = new ScanTelemetry(startedAt);
             CurrentScan = ScanSession.Start(ScanKind.Census, WorldGeneration, startedAt);
@@ -267,7 +265,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
             _catalogScanRequested = false;
             if (_catalog == null)
                 return;
-            _catalogGenerationBeforeCapture = _catalog.CatalogGeneration;
+            _completedCatalogCapturesBeforeCapture = _catalog.CompletedCaptureCount;
             var deferPublication = CurrentScan?.Kind == ScanKind.Census
                 && CurrentScan.State == ScanState.Running
                 && CurrentScan.Stage == ScanStage.CapturingCatalog;
@@ -305,7 +303,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
                 _catalog.ProcessNextSlice(CatalogSliceSize);
                 stopwatch.Stop();
                 RecordManagedSlice(stopwatch.Elapsed, Math.Max(0, _catalog.ProcessedEntityCount - before));
-                if (CurrentScan?.Kind == ScanKind.Census && CurrentScan.Stage == ScanStage.ProcessingCatalog && CurrentScan.State == ScanState.Running)
+                if (CurrentScan?.Kind == ScanKind.Census && CurrentScan.Stage == ScanStage.CapturingCatalog && CurrentScan.State == ScanState.Running)
                     ReportExactProgress(CurrentScan, _catalog.ProcessedEntityCount, _catalog.CapturedEntityCount);
                 return;
             }
@@ -313,7 +311,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
             _catalogCaptureActive = false;
             if (CurrentScan?.State == ScanState.Running && CurrentScan.Kind == ScanKind.Census && CurrentScan.Stage == ScanStage.CapturingCatalog)
             {
-                if (!_catalog.HasPendingPublication || _catalog.PendingCatalogGeneration <= _catalogGenerationBeforeCapture)
+                if (!_catalog.HasPendingPublication)
                 {
                     LastDiagnosticCode = "APA-CAT-002";
                     DegradeCapability(CapabilityId.PrefabCatalog, "catalog_capture_not_staged");
@@ -327,7 +325,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
             if (CurrentScan?.State == ScanState.Running && CurrentScan.Kind == ScanKind.AssetAudit && _assetAuditWaitingForCatalog)
             {
                 _assetAuditWaitingForCatalog = false;
-                if (_catalog.CatalogGeneration <= _catalogGenerationBeforeCapture)
+                if (_catalog.CompletedCaptureCount <= _completedCatalogCapturesBeforeCapture)
                 {
                     FailAssetAudit("APA-CAT-004", CapabilityId.PrefabCatalog, "catalog_refresh_failed_before_asset_audit");
                     return;
@@ -336,7 +334,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
                 return;
             }
 
-            if (_catalog.CatalogGeneration <= _catalogGenerationBeforeCapture)
+            if (_catalog.CompletedCaptureCount <= _completedCatalogCapturesBeforeCapture)
             {
                 LastDiagnosticCode = "APA-CAT-002";
                 DegradeCapability(CapabilityId.PrefabCatalog, "catalog_capture_not_published");
@@ -524,9 +522,9 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
                 switch (session.Stage)
                 {
                     case ScanStage.ProcessingCatalog:
-                        if (!catalog.HasPendingPublication || catalog.PendingCatalogGeneration <= _catalogGenerationAtCensusStart)
+                        if (!catalog.HasPendingPublication)
                         {
-                            FailCensusScan("APA-CAT-003", CapabilityId.PrefabCatalog, "catalog_generation_did_not_advance");
+                            FailCensusScan("APA-CAT-003", CapabilityId.PrefabCatalog, "catalog_capture_not_pending");
                             return;
                         }
                         _censusReducer = new CensusReducer(catalog.PendingRecords, WorldGeneration, catalog.PendingCatalogGeneration, DateTimeOffset.UtcNow, _requestedOptions);
@@ -612,13 +610,14 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
 
             session.TransitionTo(ScanStage.Finalizing);
             session.ReportProgress(1, 1);
-            catalog.CommitPendingCapture();
+            // Publish before committing the staged catalog: a rejected publish must fail the scan and discard
+            // the staged capture, leaving the last good catalog and census untouched.
             if (!_publishedState.TryPublishCensus(snapshot, scanSucceeded: session.CanPublish))
             {
-                LastDiagnosticCode = "APA-CEN-003";
-                DegradeCapability(CapabilityId.ObjectCensus, "census_publish_world_mismatch");
+                FailCensusScan("APA-CEN-003", CapabilityId.ObjectCensus, "census_publish_world_mismatch");
                 return;
             }
+            catalog.CommitPendingCapture();
 
             session.Complete();
             LastDiagnosticCode = null;

@@ -6,7 +6,7 @@ namespace CS2AssetPerformanceAuditor.Core.Diagnostics
     public readonly struct DiagnosticCode : IEquatable<DiagnosticCode>
     {
         private static readonly Regex ValidPattern = new Regex(
-            @"^APA-(CAT|CEN|GEO|SRF|TEX|EXP)-[0-9]{3}$",
+            @"^APA-(CAT|CEN|GEO|SRF|TEX|EXP|AUD|DEEP)-[0-9]{3}$",
             RegexOptions.CultureInvariant | RegexOptions.Compiled,
             TimeSpan.FromMilliseconds(100));
 

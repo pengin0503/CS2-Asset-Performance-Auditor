@@ -3,7 +3,7 @@ import { EvidencePanel } from "../components/EvidencePanel";
 import { FindingBadge } from "../components/FindingBadge";
 import type { FindingCategory, FindingStatus, UiFinding } from "../types";
 
-const statuses: Array<FindingStatus | "All"> = ["All", "Warning", "PotentialIssue", "Notice", "Observed"];
+const statuses: Array<FindingStatus | "All"> = ["All", "Warning", "PotentialIssue", "Notice", "Observed", "Unknown"];
 const categories: Array<FindingCategory | "All"> = ["All", "Geometry", "Lod", "Material", "Texture", "Exposure", "Integrity"];
 
 export function WarningsTab({ findings }: { findings: UiFinding[] }): React.JSX.Element {

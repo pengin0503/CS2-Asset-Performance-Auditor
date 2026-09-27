@@ -11,8 +11,11 @@ namespace CS2AssetPerformanceAuditor.Tests
         private static readonly DateTimeOffset CapturedAt = new DateTimeOffset(2026, 9, 27, 7, 10, 0, TimeSpan.Zero);
 
         [TestCase("R8G8B8A8_UNorm", 4, 4, 1, 1, 64L)]
-        [TestCase("BC1_RGB_UNorm", 4, 4, 1, 1, 8L)]
-        [TestCase("BC7_UNorm", 4, 4, 1, 1, 16L)]
+        [TestCase("RGB_DXT1_UNorm", 4, 4, 1, 1, 8L)]
+        [TestCase("RGBA_BC7_UNorm", 4, 4, 1, 1, 16L)]
+        [TestCase("RGBA_DXT5_SRGB", 4, 4, 1, 1, 16L)]
+        [TestCase("R_BC4_UNorm", 4, 4, 1, 1, 8L)]
+        [TestCase("RG_BC5_UNorm", 4, 4, 1, 1, 16L)]
         public void Representative_formats_have_documented_logical_payload(string format, int width, int height, int depth, int mips, long expected)
         {
             var result = TextureFootprintEstimator.Estimate(width, height, depth, mips, format, CapturedAt);
@@ -23,7 +26,7 @@ namespace CS2AssetPerformanceAuditor.Tests
         [Test]
         public void Block_compression_rounds_up_partial_blocks()
         {
-            Assert.That(TextureFootprintEstimator.Estimate(5, 5, 1, 1, "BC1_RGB_UNorm", CapturedAt).Value, Is.EqualTo(32L));
+            Assert.That(TextureFootprintEstimator.Estimate(5, 5, 1, 1, "RGB_DXT1_UNorm", CapturedAt).Value, Is.EqualTo(32L));
         }
 
         [Test]
@@ -32,6 +35,21 @@ namespace CS2AssetPerformanceAuditor.Tests
             Assert.That(TextureFootprintEstimator.Estimate(4, 4, 1, 3, "R8G8B8A8_UNorm", CapturedAt).Value, Is.EqualTo(84L));
             Assert.That(TextureFootprintEstimator.MetricName, Does.Contain("logical"));
             Assert.That(TextureFootprintEstimator.MetricName, Does.Not.Contain("VRAM").IgnoreCase);
+        }
+
+        [Test]
+        public void Texture_array_layers_each_carry_a_full_mip_chain()
+        {
+            var single = TextureFootprintEstimator.Estimate(1024, 1024, 1, 11, "RGBA_BC7_UNorm", CapturedAt).Value;
+            var eightLayers = TextureFootprintEstimator.Estimate(1024, 1024, 8, 11, "RGBA_BC7_UNorm", CapturedAt).Value;
+            Assert.That(eightLayers, Is.EqualTo(single * 8));
+        }
+
+        [TestCase("BC7_UNorm")]
+        [TestCase("BC1_RGB_UNorm")]
+        public void Names_that_are_not_GraphicsFormat_members_stay_unsupported(string format)
+        {
+            Assert.That(TextureFootprintEstimator.Estimate(4, 4, 1, 1, format, CapturedAt).Availability, Is.EqualTo(Availability.Unsupported));
         }
 
         [Test]

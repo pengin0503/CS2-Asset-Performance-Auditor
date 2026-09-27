@@ -23,6 +23,10 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Prefabs
 
         long PendingCatalogGeneration { get; }
 
+        // Number of captures that completed and were published (or committed). Unlike CatalogGeneration,
+        // it advances even when a capture found the catalog unchanged.
+        long CompletedCaptureCount { get; }
+
         DateTimeOffset CatalogCapturedAt { get; }
 
         DateTimeOffset PendingCapturedAt { get; }

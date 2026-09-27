@@ -7,11 +7,11 @@ namespace CS2AssetPerformanceAuditor.Core.Findings
 {
     public sealed class GeometryFindingInput
     {
-        public GeometryFindingInput(string assetId, string peerCategory, bool lowerLodPresent, bool requiredRenderReferenceBroken, long? lod0VertexCount, long? lod1VertexCount)
+        public GeometryFindingInput(string assetId, string peerCategory, bool lowerLodPresent, bool requiredRenderReferenceBroken, long? lod0VertexCount, long? lod1VertexCount, bool renderStructureResolved = true)
         {
             if (string.IsNullOrWhiteSpace(assetId)) throw new ArgumentException("Asset ID is required.", nameof(assetId));
             if (string.IsNullOrWhiteSpace(peerCategory)) throw new ArgumentException("Peer category is required.", nameof(peerCategory));
-            AssetId = assetId; PeerCategory = peerCategory; LowerLodPresent = lowerLodPresent; RequiredRenderReferenceBroken = requiredRenderReferenceBroken; Lod0VertexCount = lod0VertexCount; Lod1VertexCount = lod1VertexCount;
+            AssetId = assetId; PeerCategory = peerCategory; LowerLodPresent = lowerLodPresent; RequiredRenderReferenceBroken = requiredRenderReferenceBroken; Lod0VertexCount = lod0VertexCount; Lod1VertexCount = lod1VertexCount; RenderStructureResolved = renderStructureResolved;
         }
         public string AssetId { get; }
         public string PeerCategory { get; }
@@ -19,6 +19,9 @@ namespace CS2AssetPerformanceAuditor.Core.Findings
         public bool RequiredRenderReferenceBroken { get; }
         public long? Lod0VertexCount { get; }
         public long? Lod1VertexCount { get; }
+        // False when the render structure was not resolved (unknown, not applicable, or failed coverage);
+        // LOD rules then have no evidence to evaluate and must not report an absent LOD.
+        public bool RenderStructureResolved { get; }
     }
 
     public sealed class ExposureFindingInput
@@ -57,6 +60,9 @@ namespace CS2AssetPerformanceAuditor.Core.Findings
             if (input.RequiredRenderReferenceBroken)
                 findings.Add(new Finding("APA-INT-001", FindingStatus.Warning, FindingCategory.Integrity, "Required render reference is unresolved", "A required render reference could not be resolved; this is structural evidence rather than a performance heuristic.", new[] { "asset=" + input.AssetId }, FindingBasis.Deterministic, RuleSetInfo.Version));
 
+            if (!input.RenderStructureResolved)
+                return findings.AsReadOnly();
+
             if (!input.LowerLodPresent)
             {
                 findings.Add(new Finding("APA-LOD-001", FindingStatus.Notice, FindingCategory.Lod, "No lower LOD observed", "No lower LOD was observed. This is an observation and is not automatically a performance defect.", new[] { "asset=" + input.AssetId }, FindingBasis.Observation, RuleSetInfo.Version));
@@ -67,7 +73,7 @@ namespace CS2AssetPerformanceAuditor.Core.Findings
             {
                 var retention = LodMetrics.RetentionPercent(input.Lod0VertexCount.Value, input.Lod1VertexCount.Value, capturedAt);
                 if (retention.HasValue && retention.Value >= RuleSetInfo.WeakLodRetentionPercent)
-                    findings.Add(new Finding("APA-LOD-002", FindingStatus.PotentialIssue, FindingCategory.Lod, "Weak LOD vertex reduction", "The lower LOD retains an unusually large share of LOD0 vertices under the versioned project heuristic; this does not prove a runtime bottleneck.", new[] { "vertexRetentionPercent=" + retention.Value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture), "heuristicThresholdPercent=" + RuleSetInfo.WeakLodRetentionPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) }, FindingBasis.Heuristic, RuleSetInfo.Version));
+                    findings.Add(new Finding("APA-LOD-002", FindingStatus.PotentialIssue, FindingCategory.Lod, "Weak LOD vertex reduction", "The lower LOD retains an unusually large share of LOD0 vertices under the versioned project heuristic; this does not prove a runtime bottleneck.", new[] { "asset=" + input.AssetId, "vertexRetentionPercent=" + retention.Value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture), "heuristicThresholdPercent=" + RuleSetInfo.WeakLodRetentionPercent.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) }, FindingBasis.Heuristic, RuleSetInfo.Version));
             }
             return findings.AsReadOnly();
         }

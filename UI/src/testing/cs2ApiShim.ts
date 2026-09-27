@@ -40,3 +40,11 @@ export function trigger(_group: string, _name: string, ..._args: unknown[]): voi
 export function useValue<T>(binding: ValueBinding<T>): T {
   return binding.value;
 }
+
+// Test-only helper: publish a new binding value the way the Gameface host would.
+export function setBindingValueForTests<T>(group: string, name: string, value: T): void {
+  const binding = bindings.get(`${group}.${name}`) as ShimBinding<T> | undefined;
+  if (!binding) throw new Error(`Binding ${group}.${name} has not been declared.`);
+  binding.value = value;
+  binding.listeners.forEach((listener) => listener(value));
+}

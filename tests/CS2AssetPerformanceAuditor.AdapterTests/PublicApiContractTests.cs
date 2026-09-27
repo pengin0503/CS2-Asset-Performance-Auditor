@@ -34,7 +34,7 @@ namespace CS2AssetPerformanceAuditor.AdapterTests
                     _assemblyPaths = _assemblyPaths.Concat(Directory.GetFiles(runtimePath, "*.dll")).ToArray();
             }
             var platformPaths = ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") ?? string.Empty)
-                .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+                .Split(new[] { Path.PathSeparator }, StringSplitOptions.RemoveEmptyEntries)
                 .Where(path => !Path.GetFileName(path).Equals("mscorlib.dll", StringComparison.OrdinalIgnoreCase));
             _metadata = new MetadataLoadContext(new PathAssemblyResolver(_assemblyPaths.Concat(platformPaths)), "mscorlib");
         }
@@ -99,6 +99,20 @@ namespace CS2AssetPerformanceAuditor.AdapterTests
             Assert.That(EnumerableItemType(surface.GetProperty("textures", PublicInstance)?.PropertyType)?.FullName,
                 Is.EqualTo("Colossal.IO.AssetDatabase.TextureAsset"));
             AssertPublicProperties(texture, "format", "dimension", "mipsCount", "mipBias", "width", "height", "depth", "rawData", "state", "isDataLoaded", "isObjectLoaded");
+        }
+
+        [Test]
+        public void Texture_footprint_formats_are_graphics_format_names_reported_by_texture_assets()
+        {
+            var texture = GameType("Colossal.IO.AssetDatabase.TextureAsset");
+            var formatType = texture.GetProperty("format", PublicInstance)!.PropertyType;
+            Assert.That(formatType.FullName, Is.EqualTo("UnityEngine.Experimental.Rendering.GraphicsFormat"));
+            Assert.That(texture.GetProperty("depth", PublicInstance)!.PropertyType.FullName, Is.EqualTo("System.Int32"));
+            Assert.That(texture.GetProperty("dimension", PublicInstance)!.PropertyType.FullName, Is.EqualTo("UnityEngine.Rendering.TextureDimension"));
+
+            var graphicsFormatNames = formatType.GetFields(BindingFlags.Public | BindingFlags.Static).Select(field => field.Name).ToArray();
+            foreach (var name in CS2AssetPerformanceAuditor.Core.Rendering.TextureFootprintEstimator.SupportedFormatNames)
+                Assert.That(graphicsFormatNames, Does.Contain(name), $"{name} is not a GraphicsFormat member name.");
         }
 
         [Test]

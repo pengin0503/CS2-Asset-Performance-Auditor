@@ -21,7 +21,7 @@ import {
   DEFAULT_SCAN_OPTIONS,
   type AssetAuditorBindings,
   type AssetQueryState,
-  type AssetRow,
+  type ExportAssetKey,
   type UiSnapshot,
 } from "./types";
 
@@ -49,7 +49,7 @@ export function AssetAuditorRoot({
   const [open, setOpen] = useState(initiallyOpen);
   const [activeTab, setActiveTab] = useState<AuditorTab>("Overview");
   const [query, setQuery] = useState<AssetQueryState>(DEFAULT_ASSET_QUERY_STATE);
-  const [selectedAsset, setSelectedAsset] = useState<AssetRow | null>(null);
+  const [selectedAsset, setSelectedAsset] = useState<ExportAssetKey | null>(null);
   const settings = normalizeUiSettings(snapshot.settings ?? DEFAULT_SCAN_OPTIONS);
   const findings = snapshot.findings ?? [];
 
@@ -81,7 +81,6 @@ export function AssetAuditorRoot({
   };
 
   const visibleFindings = settings.showNoticeFindings ? findings : findings.filter((finding) => finding.status !== "Notice");
-  const selectedExportAsset = selectedAsset == null ? null : { prefabId: selectedAsset.prefabId, prefabType: selectedAsset.prefabType };
 
   return (
     <main className="asset-auditor" aria-label="CS2 Asset Performance Auditor" style={{ fontSize: `${settings.uiScale}em` }}>
@@ -102,12 +101,12 @@ export function AssetAuditorRoot({
           </nav>
           <div className="apa__panel-body">
             {activeTab === "Overview" ? <OverviewTab snapshot={snapshot} bindings={bindings} /> : null}
-            {activeTab === "Assets" ? <AssetsTab page={snapshot.assetPage} query={query} onQueryChange={updateQuery} findings={visibleFindings} onSelectedAssetChange={setSelectedAsset} /> : null}
+            {activeTab === "Assets" ? <AssetsTab page={snapshot.assetPage} query={query} onQueryChange={updateQuery} findings={visibleFindings} onSelectedAssetChange={setSelectedAsset} onDeepInspect={(renderKey) => bindings.requestDeepInspection(renderKey)} /> : null}
             {activeTab === "Census" ? <CensusTab snapshot={snapshot} /> : null}
             {activeTab === "Warnings" ? <WarningsTab findings={visibleFindings} /> : null}
             {activeTab === "Compare" ? <CompareTab assets={snapshot.assetPage.items.slice(0, 4)} findings={visibleFindings} /> : null}
             {activeTab === "Settings" ? <SettingsTab settings={settings} onChange={updateSettings} /> : null}
-            <ExportControls selectedAsset={selectedExportAsset} onExport={(request) => bindings.requestExport(request)} />
+            <ExportControls selectedAsset={selectedAsset} onExport={(request) => bindings.requestExport(request)} />
             {exportedReport ? (
               <details className="apa__export-result"><summary>Audit export is ready</summary><textarea aria-label="Export data" readOnly value={exportedReport} /></details>
             ) : null}

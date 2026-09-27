@@ -6,10 +6,10 @@ interface VirtualAssetTableProps {
   page: AssetPage;
   onPageChange?: (offset: number) => void;
   onSelect?: (asset: AssetRow) => void;
-  selectedPrefabId?: string | null;
+  selectedKey?: string | null;
 }
 
-export function VirtualAssetTable({ page, onPageChange, onSelect, selectedPrefabId }: VirtualAssetTableProps): React.JSX.Element {
+export function VirtualAssetTable({ page, onPageChange, onSelect, selectedKey }: VirtualAssetTableProps): React.JSX.Element {
   const items = page.items.slice(0, Math.min(page.limit, MAX_ASSET_PAGE_SIZE));
   const start = page.totalCount === 0 ? 0 : page.offset + 1;
   const end = page.offset + items.length;
@@ -29,7 +29,7 @@ export function VirtualAssetTable({ page, onPageChange, onSelect, selectedPrefab
             {items.length === 0 ? (
               <tr><td colSpan={8} className="apa__empty-row">No assets match this query.</td></tr>
             ) : items.map((item) => (
-              <tr key={`${item.prefabType}:${item.prefabId}`} aria-selected={selectedPrefabId === item.prefabId}>
+              <tr key={`${item.prefabType}:${item.prefabId}`} aria-selected={selectedKey === `${item.prefabType}:${item.prefabId}`}>
                 <th scope="row">
                   <button type="button" className="apa__link-button" onClick={() => onSelect?.(item)} disabled={!onSelect}>
                     <span className="apa__asset-name">{item.displayName}</span>

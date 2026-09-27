@@ -24,12 +24,12 @@ export function CompareTab({ assets, findings }: { assets: AssetRow[]; findings:
           <table className="apa__table">
             <thead><tr><th>Dimension</th>{selected.map((asset) => <th key={`${asset.prefabType}:${asset.prefabId}`}>{asset.displayName}</th>)}</tr></thead>
             <tbody>
-              <tr><th>Instances</th>{selected.map((asset) => <td key={asset.prefabId}>{formatObservation(asset.instances)}</td>)}</tr>
-              <tr><th>Geometry / LOD0 vertices</th>{selected.map((asset) => <td key={asset.prefabId}>{formatObservation(asset.lod0Vertices ?? { availability: "NotScanned" })}</td>)}</tr>
-              <tr><th>LOD1 retention</th>{selected.map((asset) => <td key={asset.prefabId}>{formatObservation(asset.lod1RetentionPercent ?? { availability: "NotScanned" })}</td>)}</tr>
-              <tr><th>Materials</th>{selected.map((asset) => <td key={asset.prefabId}>{formatObservation(asset.materialCount ?? { availability: "NotScanned" })}</td>)}</tr>
-              <tr><th>Estimated texture payload</th>{selected.map((asset) => <td key={asset.prefabId}>{formatObservation(asset.estimatedTexturePayload ?? { availability: "NotScanned" })}</td>)}</tr>
-              <tr><th>Findings</th>{selected.map((asset) => <td key={asset.prefabId}>{findings.filter((finding) => !finding.prefabId || finding.prefabId === asset.prefabId).length}</td>)}</tr>
+              <tr><th>Instances</th>{selected.map((asset) => <td key={`${asset.prefabType}:${asset.prefabId}`}>{formatObservation(asset.instances)}</td>)}</tr>
+              <tr><th>Geometry / LOD0 vertices</th>{selected.map((asset) => <td key={`${asset.prefabType}:${asset.prefabId}`}>{formatObservation(asset.lod0Vertices ?? { availability: "NotScanned" })}</td>)}</tr>
+              <tr><th>LOD1 retention</th>{selected.map((asset) => <td key={`${asset.prefabType}:${asset.prefabId}`}>{formatObservation(asset.lod1RetentionPercent ?? { availability: "NotScanned" })}</td>)}</tr>
+              <tr><th>Materials</th>{selected.map((asset) => <td key={`${asset.prefabType}:${asset.prefabId}`}>{formatObservation(asset.materialCount ?? { availability: "NotScanned" })}</td>)}</tr>
+              <tr><th>Estimated texture payload</th>{selected.map((asset) => <td key={`${asset.prefabType}:${asset.prefabId}`}>{formatObservation(asset.estimatedTexturePayload ?? { availability: "NotScanned" })}</td>)}</tr>
+              <tr><th>Findings</th>{selected.map((asset) => <td key={`${asset.prefabType}:${asset.prefabId}`}>{findings.filter((finding) => (!finding.prefabId || finding.prefabId === asset.prefabId) && (!finding.prefabType || finding.prefabType === asset.prefabType)).length}</td>)}</tr>
             </tbody>
           </table>
         </div>

@@ -10,7 +10,6 @@
     <CSIIManagedPath Condition="'$(CSII_MANAGEDPATH)' != ''">$(CSII_MANAGEDPATH)</CSIIManagedPath>
     <CSIIManagedPath Condition="'$(CSIIManagedPath)' == '' and '$(ManagedPath)' != ''">$(ManagedPath)</CSIIManagedPath>
     <CSIIManagedPath Condition="'$(CSIIManagedPath)' == '' and Exists('$(CSII_TOOLPATH)/Game.dll')">$(CSII_TOOLPATH)</CSIIManagedPath>
-    <DefineConstants Condition="'$(CSIIManagedPath)' != '' and Exists('$(CSIIManagedPath)/Game.dll')">$(DefineConstants);CS2_GAME_API_AVAILABLE</DefineConstants>
     <AssetAuditorUiDir>$(MSBuildProjectDirectory)\..\..\UI</AssetAuditorUiDir>
   </PropertyGroup>
   <ItemGroup Condition="'$(OS)' != 'Windows_NT'">
@@ -34,6 +33,11 @@
     <Reference Include="Unity.Entities"><HintPath>$(CSIIManagedPath)/Unity.Entities.dll</HintPath><Private>false</Private></Reference>
   </ItemGroup>
   <Import Project="$(CSII_TOOLPATH)/Mod.targets" Condition="'$(CSII_TOOLPATH)' != '' and Exists('$(CSII_TOOLPATH)/Mod.targets')" />
+
+  <!-- The mod assembly (systems, adapters, Setting) compiles only against the game's managed assemblies. -->
+  <Target Name="RequireCS2ManagedReferences" BeforeTargets="CoreCompile" Condition="'$(CSIIManagedPath)' == '' or !Exists('$(CSIIManagedPath)/Game.dll')">
+    <Error Text="Cities: Skylines II managed assemblies were not found. Set CSII_MANAGEDPATH (or the toolchain ManagedPath) to the directory containing Game.dll. Core logic is tested without the game through tests/CS2AssetPerformanceAuditor.Tests." />
+  </Target>
 
   <Target Name="BuildAssetAuditorUI" BeforeTargets="DeployWIP" Condition="'$(NeedBuild)' == 'true' and Exists('$(AssetAuditorUiDir)\package.json')">
     <Exec Command="npm.cmd run build" WorkingDirectory="$(AssetAuditorUiDir)" Condition="'$(OS)' == 'Windows_NT'" />

@@ -6,6 +6,7 @@ function label(status: UiFinding["status"]): string {
     case "PotentialIssue": return "Potential Issue";
     case "Warning": return "Warning";
     case "Notice": return "Notice";
+    case "Unknown": return "Unknown";
     default: return "Observed";
   }
 }

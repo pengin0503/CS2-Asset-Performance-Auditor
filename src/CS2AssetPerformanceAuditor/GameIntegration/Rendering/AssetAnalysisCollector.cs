@@ -324,7 +324,8 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Rendering
                     lowerLodPresent: relations.Any(relation => relation.RelationKind == RenderRelationKind.Lod),
                     requiredRenderReferenceBroken: coverage == RenderCoverage.Failed,
                     lod0VertexCount: directVertices.HasValue ? directVertices.Value : (long?)null,
-                    lod1VertexCount: lod1Vertices.HasValue ? lod1Vertices.Value : (long?)null),
+                    lod1VertexCount: lod1Vertices.HasValue ? lod1Vertices.Value : (long?)null,
+                    renderStructureResolved: coverage == RenderCoverage.Supported),
                 _capturedAt);
             AddAllowedFindings(findings, geometryFindings);
 

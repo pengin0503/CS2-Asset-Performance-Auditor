@@ -17,6 +17,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Prefabs
         private bool _hasWorkingCapture;
         private bool _deferPublication;
         private bool _hasPendingPublication;
+        private bool _pendingContentChanged;
         private DateTimeOffset _workingCapturedAt;
         private DateTimeOffset _pendingCapturedAt;
         private List<PrefabRecord> _workingRecords = new List<PrefabRecord>();
@@ -48,9 +49,11 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Prefabs
 
         public long CatalogGeneration { get; private set; }
 
-        public long PendingCatalogGeneration => _hasPendingPublication
+        public long PendingCatalogGeneration => _hasPendingPublication && _pendingContentChanged
             ? checked(CatalogGeneration + 1)
             : CatalogGeneration;
+
+        public long CompletedCaptureCount { get; private set; }
 
         public DateTimeOffset CatalogCapturedAt { get; private set; }
 
@@ -178,16 +181,21 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Prefabs
             if (!_hasPendingPublication)
                 throw new InvalidOperationException("No pending Prefab catalog capture is available to publish.");
 
-            _publishedRecords = _pendingRecords;
-            _publishedEntityKeys = _pendingEntityKeys;
-            CatalogGeneration = checked(CatalogGeneration + 1);
+            if (_pendingContentChanged)
+            {
+                _publishedRecords = _pendingRecords;
+                _publishedEntityKeys = _pendingEntityKeys;
+                CatalogGeneration = checked(CatalogGeneration + 1);
+            }
             CatalogCapturedAt = _pendingCapturedAt;
+            CompletedCaptureCount = checked(CompletedCaptureCount + 1);
             DiscardPendingCapture();
         }
 
         public void DiscardPendingCapture()
         {
             _hasPendingPublication = false;
+            _pendingContentChanged = false;
             _pendingCapturedAt = DateTimeOffset.MinValue;
             _pendingRecords = Array.AsReadOnly(Array.Empty<PrefabRecord>());
             _pendingEntityKeys = new ReadOnlyDictionary<Entity, PrefabKey>(new Dictionary<Entity, PrefabKey>());
@@ -205,6 +213,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Prefabs
             _publishedRecords = Array.AsReadOnly(Array.Empty<PrefabRecord>());
             _publishedEntityKeys = new ReadOnlyDictionary<Entity, PrefabKey>(new Dictionary<Entity, PrefabKey>());
             CatalogGeneration = 0;
+            CompletedCaptureCount = 0;
             CatalogCapturedAt = DateTimeOffset.MinValue;
             _capturedEntityCount = 0;
             ProcessedEntityCount = 0;
@@ -217,18 +226,41 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Prefabs
             _pendingEntityKeys = new ReadOnlyDictionary<Entity, PrefabKey>(
                 new Dictionary<Entity, PrefabKey>(_workingEntityKeys));
             _pendingCapturedAt = _workingCapturedAt;
+            _pendingContentChanged = WorkingCaptureChangesPublishedCatalog();
             _hasPendingPublication = true;
             ClearWorkingCapture();
         }
 
         private void PublishWorkingCapture()
         {
-            _publishedRecords = Array.AsReadOnly(_workingRecords.ToArray());
-            _publishedEntityKeys = new ReadOnlyDictionary<Entity, PrefabKey>(
-                new Dictionary<Entity, PrefabKey>(_workingEntityKeys));
-            CatalogGeneration = checked(CatalogGeneration + 1);
+            if (WorkingCaptureChangesPublishedCatalog())
+            {
+                _publishedRecords = Array.AsReadOnly(_workingRecords.ToArray());
+                _publishedEntityKeys = new ReadOnlyDictionary<Entity, PrefabKey>(
+                    new Dictionary<Entity, PrefabKey>(_workingEntityKeys));
+                CatalogGeneration = checked(CatalogGeneration + 1);
+            }
             CatalogCapturedAt = _workingCapturedAt;
+            CompletedCaptureCount = checked(CompletedCaptureCount + 1);
             ClearWorkingCapture();
+        }
+
+        // The generation identifies catalog content that Census and Analysis snapshots are bound to.
+        // An identical recapture keeps the generation so those snapshots stay current.
+        private bool WorkingCaptureChangesPublishedCatalog()
+        {
+            if (CompletedCaptureCount == 0)
+                return true;
+            if (!PrefabCatalogContent.HasSameRecords(_publishedRecords, _workingRecords))
+                return true;
+            if (_publishedEntityKeys.Count != _workingEntityKeys.Count)
+                return true;
+            foreach (var pair in _workingEntityKeys)
+            {
+                if (!_publishedEntityKeys.TryGetValue(pair.Key, out var publishedKey) || publishedKey != pair.Value)
+                    return true;
+            }
+            return false;
         }
 
         private void ClearWorkingCapture()

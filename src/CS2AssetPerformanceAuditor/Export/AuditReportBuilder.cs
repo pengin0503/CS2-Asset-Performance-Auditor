@@ -44,7 +44,12 @@ namespace CS2AssetPerformanceAuditor.Export
             if (!Enum.IsDefined(typeof(ExportScope), scope)) throw new ArgumentOutOfRangeException(nameof(scope));
 
             var records = catalog.ToArray();
-            var allFindings = (findings ?? analysis?.Findings ?? Array.Empty<Finding>()).ToArray();
+            // Findings produced by an analysis are owned by their Prefab entry; explicitly supplied findings have no owner.
+            var allFindings = findings != null
+                ? findings.Select(finding => new OwnedFinding(finding, null)).ToArray()
+                : (analysis?.Prefabs ?? Array.Empty<PrefabAnalysisEntry>())
+                    .SelectMany(entry => entry.Findings.Select(finding => new OwnedFinding(finding, entry.Key)))
+                    .ToArray();
             var keySet = includedKeys == null ? null : new HashSet<PrefabKey>(includedKeys);
             var scopedRecords = ScopeRecords(records, scope, keySet);
             var scopedCensus = ScopeCensus(census?.Entries ?? Array.Empty<CensusEntry>(), scope, keySet);
@@ -91,8 +96,10 @@ namespace CS2AssetPerformanceAuditor.Export
                 Analysis = new ReportAnalysis
                 {
                     Findings = scopedFindings
-                        .OrderBy(finding => finding.RuleId, StringComparer.Ordinal)
-                        .ThenBy(finding => finding.Title, StringComparer.Ordinal)
+                        .OrderBy(owned => owned.Finding.RuleId, StringComparer.Ordinal)
+                        .ThenBy(owned => owned.Owner?.PrefabType ?? string.Empty, StringComparer.Ordinal)
+                        .ThenBy(owned => owned.Owner?.PrefabId ?? string.Empty, StringComparer.Ordinal)
+                        .ThenBy(owned => owned.Finding.Title, StringComparer.Ordinal)
                         .Select(MapFinding).ToArray(),
                     Assets = scopedAnalysis.Prefabs.Select(MapAssetAnalysis).ToArray(),
                     RenderAssets = scopedAnalysis.RenderAssets.Select(MapRenderAssetAnalysis).ToArray()
@@ -116,13 +123,15 @@ namespace CS2AssetPerformanceAuditor.Export
             return entries;
         }
 
-        private static IEnumerable<Finding> ScopeFindings(IEnumerable<Finding> findings, ExportScope scope, HashSet<PrefabKey>? keys)
+        private static IEnumerable<OwnedFinding> ScopeFindings(IEnumerable<OwnedFinding> findings, ExportScope scope, HashSet<PrefabKey>? keys)
         {
-            if (scope == ExportScope.Census) return Array.Empty<Finding>();
+            if (scope == ExportScope.Census) return Array.Empty<OwnedFinding>();
             if (scope != ExportScope.Filtered && scope != ExportScope.Selected) return findings;
-            if (keys == null) return Array.Empty<Finding>();
+            if (keys == null) return Array.Empty<OwnedFinding>();
             var ids = new HashSet<string>(keys.Select(key => key.PrefabId), StringComparer.Ordinal);
-            return findings.Where(finding => finding.Evidence.Any(evidence => evidence.StartsWith("asset=", StringComparison.Ordinal) && ids.Contains(evidence.Substring("asset=".Length))));
+            return findings.Where(owned => owned.Owner.HasValue
+                ? keys.Contains(owned.Owner.Value)
+                : owned.Finding.Evidence.Any(evidence => evidence.StartsWith("asset=", StringComparison.Ordinal) && ids.Contains(evidence.Substring("asset=".Length))));
         }
 
         private static ScopedAnalysis ScopeAnalysis(AssetAnalysisSnapshot? analysis, ExportScope scope, HashSet<PrefabKey>? keys)
@@ -299,17 +308,23 @@ namespace CS2AssetPerformanceAuditor.Export
             }).ToArray()
         };
 
-        private ReportFinding MapFinding(Finding finding) => new ReportFinding
+        private ReportFinding MapFinding(OwnedFinding owned)
         {
-            RuleId = _sanitizer.SanitizeText(finding.RuleId),
-            Status = finding.Status.ToString(),
-            Category = finding.Category.ToString(),
-            Title = _sanitizer.SanitizeText(finding.Title),
-            Explanation = _sanitizer.SanitizeText(finding.Explanation),
-            Evidence = finding.Evidence.Select(_sanitizer.SanitizeText).ToArray(),
-            Basis = finding.Basis.ToString(),
-            RuleVersion = _sanitizer.SanitizeText(finding.RuleVersion)
-        };
+            var finding = owned.Finding;
+            return new ReportFinding
+            {
+                RuleId = _sanitizer.SanitizeText(finding.RuleId),
+                Status = finding.Status.ToString(),
+                Category = finding.Category.ToString(),
+                Title = _sanitizer.SanitizeText(finding.Title),
+                Explanation = _sanitizer.SanitizeText(finding.Explanation),
+                Evidence = finding.Evidence.Select(_sanitizer.SanitizeText).ToArray(),
+                Basis = finding.Basis.ToString(),
+                RuleVersion = _sanitizer.SanitizeText(finding.RuleVersion),
+                PrefabId = owned.Owner.HasValue ? _sanitizer.SanitizeText(owned.Owner.Value.PrefabId) : null,
+                PrefabType = owned.Owner.HasValue ? _sanitizer.SanitizeText(owned.Owner.Value.PrefabType) : null
+            };
+        }
 
         private ReportObservation MapObservation(Observation<long> observation) => MapLongObservation(
             observation.Availability, observation.Origin, observation.CapturedAt, observation.HasValue ? observation.Value : (long?)null, observation.DiagnosticCode);
@@ -364,6 +379,17 @@ namespace CS2AssetPerformanceAuditor.Export
 
         private string[]? SanitizeIdentifiers(IReadOnlyList<string>? identifiers) => identifiers?.Select(_sanitizer.SanitizeText).ToArray();
         private static string FormatTime(DateTimeOffset value) => value.ToUniversalTime().ToString("O");
+
+        private sealed class OwnedFinding
+        {
+            public OwnedFinding(Finding finding, PrefabKey? owner)
+            {
+                Finding = finding;
+                Owner = owner;
+            }
+            public Finding Finding { get; }
+            public PrefabKey? Owner { get; }
+        }
 
         private sealed class ScopedAnalysis
         {

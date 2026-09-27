@@ -5,7 +5,7 @@ import {
   DEFAULT_ASSET_QUERY_STATE,
   type AssetPage,
   type AssetQueryState,
-  type AssetRow,
+  type ExportAssetKey,
   type SourceFilter,
   type UiFinding,
 } from "../types";
@@ -15,16 +15,22 @@ interface AssetsTabProps {
   query: AssetQueryState;
   onQueryChange: (patch: Partial<AssetQueryState>) => void;
   findings?: UiFinding[];
-  onSelectedAssetChange?: (asset: AssetRow | null) => void;
+  onSelectedAssetChange?: (asset: ExportAssetKey | null) => void;
+  onDeepInspect?: (renderKey: string) => void;
 }
 
-export function AssetsTab({ page, query, onQueryChange, findings = [], onSelectedAssetChange }: AssetsTabProps): React.JSX.Element {
+export function AssetsTab({ page, query, onQueryChange, findings = [], onSelectedAssetChange, onDeepInspect }: AssetsTabProps): React.JSX.Element {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const selected = useMemo(() => page.items.find((item) => `${item.prefabType}:${item.prefabId}` === selectedKey) ?? null, [page.items, selectedKey]);
 
+  const selectedPrefabId = selected?.prefabId ?? null;
+  const selectedPrefabType = selected?.prefabType ?? null;
+  // Depend on the key, not the row object: each published snapshot carries new row objects for the same asset.
   useEffect(() => {
-    onSelectedAssetChange?.(selected);
-  }, [onSelectedAssetChange, selected]);
+    onSelectedAssetChange?.(selectedPrefabId === null || selectedPrefabType === null
+      ? null
+      : { prefabId: selectedPrefabId, prefabType: selectedPrefabType });
+  }, [onSelectedAssetChange, selectedPrefabId, selectedPrefabType]);
 
   return (
     <section className="apa__tab-content" aria-labelledby="apa-assets-title">
@@ -39,9 +45,9 @@ export function AssetsTab({ page, query, onQueryChange, findings = [], onSelecte
         <label className="apa__field"><span>Presence</span><select aria-label="Filter by presence" value={query.presenceFilter ?? "Any"} onChange={(event) => onQueryChange({ presenceFilter: event.currentTarget.value === "Any" ? null : event.currentTarget.value as NonNullable<AssetQueryState["presenceFilter"]> })}><option value="Any">Any presence</option><option value="Present">Present</option><option value="NotPresentAtSnapshot">Not present</option><option value="NotApplicable">Not applicable</option><option value="Unknown">Unknown</option></select></label>
         <label className="apa__field"><span>Sort</span><select aria-label="Sort assets" value={query.sort} onChange={(event) => onQueryChange({ sort: event.currentTarget.value as AssetQueryState["sort"] })}><option value="DisplayNameAscending">Name A–Z</option><option value="DisplayNameDescending">Name Z–A</option><option value="PrefabIdAscending">Prefab ID</option><option value="InstancesDescending">Instances</option></select></label>
       </div>
-      <VirtualAssetTable page={page} onPageChange={(offset) => onQueryChange({ offset })} onSelect={(asset) => setSelectedKey(`${asset.prefabType}:${asset.prefabId}`)} selectedPrefabId={selected?.prefabId ?? null} />
+      <VirtualAssetTable page={page} onPageChange={(offset) => onQueryChange({ offset })} onSelect={(asset) => setSelectedKey(`${asset.prefabType}:${asset.prefabId}`)} selectedKey={selected ? `${selected.prefabType}:${selected.prefabId}` : null} />
       <button type="button" className="apa__link-button" onClick={() => onQueryChange(DEFAULT_ASSET_QUERY_STATE)}>Reset filters</button>
-      {selected ? <AssetDetails asset={selected} findings={findings} /> : null}
+      {selected ? <AssetDetails asset={selected} findings={findings} onDeepInspect={onDeepInspect} /> : null}
     </section>
   );
 }

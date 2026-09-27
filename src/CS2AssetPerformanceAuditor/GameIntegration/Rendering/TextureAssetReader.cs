@@ -21,6 +21,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Rendering
         {
             var width = texture.width;
             var height = texture.height;
+            // TextureAsset stores Tex2D (depth 1) and Tex2DArray (depth = slice count) data only.
             var depth = Math.Max(1, texture.depth);
             var mips = Math.Max(1, texture.mipsCount);
             var format = texture.format.ToString();

@@ -8,6 +8,8 @@ namespace CS2AssetPerformanceAuditor.UI
         public const string Snapshot = "snapshot";
         public const string ExportedReport = "exportedReport";
         public const string RequestCensus = "requestCensus";
+        public const string RequestAssetAudit = "requestAssetAudit";
+        public const string RequestDeepInspection = "requestDeepInspection";
         public const string CancelCensus = "cancelCensus";
         public const string QueryAssets = "queryAssets";
         public const string RequestExport = "requestExport";

@@ -20,7 +20,7 @@ export type CensusPresence =
 
 export type FindingStatus = "Warning" | "PotentialIssue" | "Notice" | "Observed";
 export type FindingCategory = "Geometry" | "Lod" | "Material" | "Texture" | "Exposure" | "Integrity";
-export type RenderCoverage = Availability | "Unknown";
+export type RenderCoverage = "Supported" | "NotApplicable" | "Unknown" | "Failed" | "NotScanned";
 
 export interface UiObservation<T = number> {
   availability: Availability;
@@ -176,6 +176,7 @@ export interface UiSnapshot {
 
 export interface AssetAuditorBindings {
   requestCensus(options: UiScanOptions): void;
+  requestAssetAudit(options: UiScanOptions): void;
   cancelCensus(): void;
   requestAssetsPage(query: AssetQueryRequest): void;
   requestExport(): void;

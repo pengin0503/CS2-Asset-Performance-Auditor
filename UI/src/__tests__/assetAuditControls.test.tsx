@@ -9,6 +9,7 @@ describe("Asset audit controls", () => {
     const bindings: AssetAuditorBindings = {
       requestCensus() {},
       requestAssetAudit() {},
+      requestDeepInspection() {},
       cancelCensus() {},
       requestAssetsPage() {},
       requestExport() {},

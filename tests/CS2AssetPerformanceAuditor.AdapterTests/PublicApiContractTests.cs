@@ -109,6 +109,29 @@ namespace CS2AssetPerformanceAuditor.AdapterTests
             Assert.That(uiSystem.BaseType?.FullName, Is.EqualTo("Game.GameSystemBase"));
         }
 
+        [Test]
+        public void Prefab_classification_and_source_markers_are_available_as_public_api()
+        {
+            var prefabBase = GameType("Game.Prefabs.PrefabBase");
+            AssertPublicProperties(prefabBase, "isBuiltin", "isSubscribedMod", "isPackaged", "asset");
+            Assert.That(prefabBase.GetField("components", PublicInstance), Is.Not.Null);
+
+            foreach (var markerType in new[]
+            {
+                "Game.Prefabs.BuildingPrefab",
+                "Game.Prefabs.StaticObjectPrefab",
+                "Game.Prefabs.CityServiceBuilding",
+                "Game.Prefabs.TreeObject",
+                "Game.Prefabs.VehiclePrefab",
+                "Game.Prefabs.NetPrefab",
+                "Game.Prefabs.RenderPrefab"
+            })
+                Assert.That(GameType(markerType).IsPublic, Is.True, markerType);
+
+            var assetData = GameType("Colossal.IO.AssetDatabase.AssetData");
+            AssertPublicProperties(assetData, "identifier", "uniqueName", "name");
+        }
+
         private static bool HasGenericMethod(Type type, string name, string parameterType, int genericArity)
         {
             return type.GetMethods(PublicInstance)

@@ -12,5 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="../../src/CS2AssetPerformanceAuditor/Core/**/*.cs" LinkBase="Core" />
+    <Compile Include="../../src/CS2AssetPerformanceAuditor/GameIntegration/Prefabs/PrefabClassifier.cs" Link="GameIntegration/PrefabClassifier.cs" />
+    <Compile Include="../../src/CS2AssetPerformanceAuditor/GameIntegration/Prefabs/SourceMetadataReader.cs" Link="GameIntegration/SourceMetadataReader.cs" />
   </ItemGroup>
 </Project>

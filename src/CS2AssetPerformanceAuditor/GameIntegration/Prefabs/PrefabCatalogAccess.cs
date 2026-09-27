@@ -1,0 +1,231 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using CS2AssetPerformanceAuditor.Core.Prefabs;
+using Game.Prefabs;
+using Unity.Collections;
+using Unity.Entities;
+
+namespace CS2AssetPerformanceAuditor.GameIntegration.Prefabs
+{
+    public sealed class PrefabCatalogAccess : IPrefabCatalogAccess
+    {
+        private readonly World _world;
+        private Entity[] _capturedEntities = Array.Empty<Entity>();
+        private int _capturedEntityCount;
+        private int _nextEntityIndex;
+        private bool _hasWorkingCapture;
+        private List<PrefabRecord> _workingRecords = new List<PrefabRecord>();
+        private Dictionary<PrefabKey, PrefabRecord> _workingByKey = new Dictionary<PrefabKey, PrefabRecord>();
+        private Dictionary<Entity, PrefabKey> _workingEntityKeys = new Dictionary<Entity, PrefabKey>();
+        private IReadOnlyList<PrefabRecord> _publishedRecords = Array.AsReadOnly(Array.Empty<PrefabRecord>());
+        private IReadOnlyDictionary<Entity, PrefabKey> _publishedEntityKeys =
+            new ReadOnlyDictionary<Entity, PrefabKey>(new Dictionary<Entity, PrefabKey>());
+
+        public PrefabCatalogAccess(World world)
+        {
+            _world = world ?? throw new ArgumentNullException(nameof(world));
+        }
+
+        public bool IsWorking => _hasWorkingCapture;
+
+        public bool HasPendingItems => _hasWorkingCapture && _nextEntityIndex < _capturedEntities.Length;
+
+        public int CapturedEntityCount => _capturedEntityCount;
+
+        public int ProcessedEntityCount { get; private set; }
+
+        public int UnresolvedEntityCount { get; private set; }
+
+        public long CatalogGeneration { get; private set; }
+
+        public IReadOnlyList<PrefabRecord> PublishedRecords => _publishedRecords;
+
+        public IReadOnlyDictionary<Entity, PrefabKey> RuntimeEntityKeys => _publishedEntityKeys;
+
+        public void BeginCapture()
+        {
+            if (_hasWorkingCapture)
+                throw new InvalidOperationException("A Prefab catalog capture is already active.");
+            if (!_world.IsCreated)
+                throw new InvalidOperationException("The current game world is no longer available.");
+
+            var entityManager = _world.EntityManager;
+            var query = entityManager.CreateEntityQuery(ComponentType.ReadOnly<PrefabData>());
+            NativeArray<Entity> captured = default;
+            try
+            {
+                captured = query.ToEntityArray(Allocator.Temp);
+                _capturedEntities = new Entity[captured.Length];
+                _capturedEntityCount = captured.Length;
+                for (var index = 0; index < captured.Length; index++)
+                    _capturedEntities[index] = captured[index];
+            }
+            finally
+            {
+                if (captured.IsCreated)
+                    captured.Dispose();
+                query.Dispose();
+            }
+
+            _nextEntityIndex = 0;
+            ProcessedEntityCount = 0;
+            UnresolvedEntityCount = 0;
+            _workingRecords = new List<PrefabRecord>(_capturedEntities.Length);
+            _workingByKey = new Dictionary<PrefabKey, PrefabRecord>();
+            _workingEntityKeys = new Dictionary<Entity, PrefabKey>();
+            _hasWorkingCapture = true;
+        }
+
+        public int ProcessNextSlice(int maximumItems)
+        {
+            if (maximumItems <= 0)
+                throw new ArgumentOutOfRangeException(nameof(maximumItems));
+            if (!_hasWorkingCapture)
+                return 0;
+
+            var prefabSystem = _world.GetExistingSystemManaged<PrefabSystem>();
+            if (prefabSystem == null)
+            {
+                CancelCapture();
+                return 0;
+            }
+
+            var processedThisSlice = 0;
+            var entityManager = _world.EntityManager;
+            while (_nextEntityIndex < _capturedEntities.Length && processedThisSlice < maximumItems)
+            {
+                var entity = _capturedEntities[_nextEntityIndex++];
+                processedThisSlice++;
+                ProcessedEntityCount++;
+
+                try
+                {
+                    if (!entityManager.Exists(entity))
+                    {
+                        UnresolvedEntityCount++;
+                        continue;
+                    }
+
+                    var prefabData = entityManager.GetComponentData<PrefabData>(entity);
+                    if (!prefabSystem.TryGetPrefab<PrefabBase>(prefabData, out var prefab) || prefab == null)
+                    {
+                        UnresolvedEntityCount++;
+                        continue;
+                    }
+
+                    var traits = Classify(prefab);
+                    var prefabId = GetStablePrefabId(prefab);
+                    var key = new PrefabKey(prefabId, PrefabClassifier.GetTypeId(traits));
+                    var asset = prefab.asset;
+                    var evidence = SourceMetadataReader.Read(
+                        prefab.isBuiltin,
+                        prefab.isSubscribedMod,
+                        prefab.isPackaged,
+                        assetDatabaseSource: string.IsNullOrWhiteSpace(asset?.identifier) ? null : asset!.identifier);
+                    var displayName = GetDisplayName(prefab, prefabId);
+                    if (!_workingByKey.ContainsKey(key))
+                    {
+                        var record = new PrefabRecord(key, displayName, traits, evidence);
+                        _workingByKey.Add(key, record);
+                        _workingRecords.Add(record);
+                    }
+                    _workingEntityKeys[entity] = key;
+                }
+                catch
+                {
+                    // A single malformed Prefab does not invalidate other catalog entries.
+                    UnresolvedEntityCount++;
+                }
+            }
+
+            if (_nextEntityIndex >= _capturedEntities.Length)
+                PublishWorkingCapture();
+
+            return processedThisSlice;
+        }
+
+        public void CancelCapture()
+        {
+            _capturedEntities = Array.Empty<Entity>();
+            _nextEntityIndex = 0;
+            _hasWorkingCapture = false;
+            _workingRecords.Clear();
+            _workingByKey.Clear();
+            _workingEntityKeys.Clear();
+        }
+
+        public void ResetForWorld()
+        {
+            CancelCapture();
+            _publishedRecords = Array.AsReadOnly(Array.Empty<PrefabRecord>());
+            _publishedEntityKeys = new ReadOnlyDictionary<Entity, PrefabKey>(new Dictionary<Entity, PrefabKey>());
+            CatalogGeneration = 0;
+            _capturedEntityCount = 0;
+            ProcessedEntityCount = 0;
+            UnresolvedEntityCount = 0;
+        }
+
+        private void PublishWorkingCapture()
+        {
+            _publishedRecords = Array.AsReadOnly(_workingRecords.ToArray());
+            _publishedEntityKeys = new ReadOnlyDictionary<Entity, PrefabKey>(
+                new Dictionary<Entity, PrefabKey>(_workingEntityKeys));
+            CatalogGeneration++;
+            _hasWorkingCapture = false;
+            _capturedEntities = Array.Empty<Entity>();
+            _workingRecords = new List<PrefabRecord>();
+            _workingByKey = new Dictionary<PrefabKey, PrefabRecord>();
+            _workingEntityKeys = new Dictionary<Entity, PrefabKey>();
+        }
+
+        private static PrefabTraits Classify(PrefabBase prefab)
+        {
+            var hasServiceBuildingMarker = false;
+            var hasTreeMarker = false;
+            if (prefab.components != null)
+            {
+                foreach (var component in prefab.components)
+                {
+                    if (component is CityServiceBuilding)
+                        hasServiceBuildingMarker = true;
+                    if (component is TreeObject)
+                        hasTreeMarker = true;
+                }
+            }
+
+            var isBuilding = prefab is BuildingPrefab;
+            var isTree = hasTreeMarker;
+            var isProp = prefab is StaticObjectPrefab && !isBuilding && !isTree;
+            return PrefabClassifier.Classify(
+                isBuilding: isBuilding,
+                isServiceBuilding: hasServiceBuildingMarker,
+                isProp: isProp,
+                isTree: isTree,
+                isVehicle: prefab is VehiclePrefab,
+                isNetwork: prefab is NetPrefab,
+                isRenderOnly: prefab is RenderPrefab);
+        }
+
+        private static string GetStablePrefabId(PrefabBase prefab)
+        {
+            var asset = prefab.asset;
+            if (!string.IsNullOrWhiteSpace(asset?.identifier))
+                return asset!.identifier;
+            if (!string.IsNullOrWhiteSpace(asset?.uniqueName))
+                return asset!.uniqueName;
+            if (!string.IsNullOrWhiteSpace(prefab.name))
+                return prefab.name;
+            throw new InvalidOperationException("A stable Prefab identifier is unavailable.");
+        }
+
+        private static string GetDisplayName(PrefabBase prefab, string prefabId)
+        {
+            if (!string.IsNullOrWhiteSpace(prefab.name))
+                return prefab.name;
+            if (!string.IsNullOrWhiteSpace(prefab.asset?.name))
+                return prefab.asset.name;
+            return prefabId;
+        }
+    }
+}

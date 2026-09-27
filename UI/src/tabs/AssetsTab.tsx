@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { VirtualAssetTable } from "../components/VirtualAssetTable";
 import { AssetDetails } from "../details/AssetDetails";
 import {
   DEFAULT_ASSET_QUERY_STATE,
   type AssetPage,
   type AssetQueryState,
+  type AssetRow,
   type SourceFilter,
   type UiFinding,
 } from "../types";
@@ -14,12 +15,16 @@ interface AssetsTabProps {
   query: AssetQueryState;
   onQueryChange: (patch: Partial<AssetQueryState>) => void;
   findings?: UiFinding[];
-  onDeepInspect?: (renderKey: string) => void;
+  onSelectedAssetChange?: (asset: AssetRow | null) => void;
 }
 
-export function AssetsTab({ page, query, onQueryChange, findings = [], onDeepInspect }: AssetsTabProps): React.JSX.Element {
+export function AssetsTab({ page, query, onQueryChange, findings = [], onSelectedAssetChange }: AssetsTabProps): React.JSX.Element {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const selected = useMemo(() => page.items.find((item) => `${item.prefabType}:${item.prefabId}` === selectedKey) ?? null, [page.items, selectedKey]);
+
+  useEffect(() => {
+    onSelectedAssetChange?.(selected);
+  }, [onSelectedAssetChange, selected]);
 
   return (
     <section className="apa__tab-content" aria-labelledby="apa-assets-title">
@@ -36,7 +41,7 @@ export function AssetsTab({ page, query, onQueryChange, findings = [], onDeepIns
       </div>
       <VirtualAssetTable page={page} onPageChange={(offset) => onQueryChange({ offset })} onSelect={(asset) => setSelectedKey(`${asset.prefabType}:${asset.prefabId}`)} selectedPrefabId={selected?.prefabId ?? null} />
       <button type="button" className="apa__link-button" onClick={() => onQueryChange(DEFAULT_ASSET_QUERY_STATE)}>Reset filters</button>
-      {selected ? <AssetDetails asset={selected} findings={findings} onDeepInspect={onDeepInspect} /> : null}
+      {selected ? <AssetDetails asset={selected} findings={findings} /> : null}
     </section>
   );
 }

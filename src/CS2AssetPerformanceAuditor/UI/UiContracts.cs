@@ -21,6 +21,7 @@ namespace CS2AssetPerformanceAuditor.UI
         [DataMember(Name = "summary", Order = 2)] public UiSummary Summary { get; set; } = new UiSummary();
         [DataMember(Name = "assetPage", Order = 3)] public UiAssetPage AssetPage { get; set; } = new UiAssetPage();
         [DataMember(Name = "settings", Order = 4)] public UiScanOptions Settings { get; set; } = new UiScanOptions();
+        [DataMember(Name = "findings", Order = 5)] public UiFinding[] Findings { get; set; } = new UiFinding[0];
     }
 
     [DataContract]
@@ -80,6 +81,16 @@ namespace CS2AssetPerformanceAuditor.UI
     }
 
     [DataContract]
+    public sealed class UiDoubleObservation
+    {
+        [DataMember(Name = "availability", Order = 1)] public string Availability { get; set; } = "NotScanned";
+        [DataMember(Name = "value", Order = 2, EmitDefaultValue = true)] public double? Value { get; set; }
+        [DataMember(Name = "origin", Order = 3, EmitDefaultValue = true)] public string? Origin { get; set; }
+        [DataMember(Name = "capturedAt", Order = 4, EmitDefaultValue = true)] public string? CapturedAt { get; set; }
+        [DataMember(Name = "diagnosticCode", Order = 5, EmitDefaultValue = true)] public string? DiagnosticCode { get; set; }
+    }
+
+    [DataContract]
     public sealed class UiAssetPage
     {
         [DataMember(Name = "offset", Order = 1)] public int Offset { get; set; }
@@ -100,6 +111,38 @@ namespace CS2AssetPerformanceAuditor.UI
         [DataMember(Name = "instances", Order = 7)] public UiObservation Instances { get; set; } = new UiObservation();
         [DataMember(Name = "presence", Order = 8)] public string Presence { get; set; } = "Unknown";
         [DataMember(Name = "counters", Order = 9, EmitDefaultValue = true)] public UiCensusCounts? Counters { get; set; }
+        [DataMember(Name = "renderCoverage", Order = 10)] public string RenderCoverage { get; set; } = "NotScanned";
+        [DataMember(Name = "estimatedTexturePayload", Order = 11)] public UiObservation EstimatedTexturePayload { get; set; } = new UiObservation();
+        [DataMember(Name = "findingCount", Order = 12)] public int FindingCount { get; set; }
+        [DataMember(Name = "lod0Vertices", Order = 13)] public UiObservation Lod0Vertices { get; set; } = new UiObservation();
+        [DataMember(Name = "lod1RetentionPercent", Order = 14)] public UiDoubleObservation Lod1RetentionPercent { get; set; } = new UiDoubleObservation();
+        [DataMember(Name = "materialCount", Order = 15)] public UiObservation MaterialCount { get; set; } = new UiObservation();
+        [DataMember(Name = "uniqueTextureCount", Order = 16)] public UiObservation UniqueTextureCount { get; set; } = new UiObservation();
+        [DataMember(Name = "renderRelations", Order = 17)] public UiRenderRelation[] RenderRelations { get; set; } = new UiRenderRelation[0];
+    }
+
+    [DataContract]
+    public sealed class UiRenderRelation
+    {
+        [DataMember(Name = "kind", Order = 1)] public string Kind { get; set; } = string.Empty;
+        [DataMember(Name = "from", Order = 2)] public string From { get; set; } = string.Empty;
+        [DataMember(Name = "to", Order = 3)] public string To { get; set; } = string.Empty;
+        [DataMember(Name = "lodLevel", Order = 4, EmitDefaultValue = true)] public int? LodLevel { get; set; }
+    }
+
+    [DataContract]
+    public sealed class UiFinding
+    {
+        [DataMember(Name = "ruleId", Order = 1)] public string RuleId { get; set; } = string.Empty;
+        [DataMember(Name = "status", Order = 2)] public string Status { get; set; } = "Observed";
+        [DataMember(Name = "category", Order = 3)] public string Category { get; set; } = "Integrity";
+        [DataMember(Name = "title", Order = 4)] public string Title { get; set; } = string.Empty;
+        [DataMember(Name = "explanation", Order = 5)] public string Explanation { get; set; } = string.Empty;
+        [DataMember(Name = "evidence", Order = 6)] public string[] Evidence { get; set; } = new string[0];
+        [DataMember(Name = "basis", Order = 7)] public string Basis { get; set; } = string.Empty;
+        [DataMember(Name = "ruleVersion", Order = 8)] public string RuleVersion { get; set; } = string.Empty;
+        [DataMember(Name = "prefabId", Order = 9, EmitDefaultValue = true)] public string? PrefabId { get; set; }
+        [DataMember(Name = "prefabType", Order = 10, EmitDefaultValue = true)] public string? PrefabType { get; set; }
     }
 
     [DataContract]
@@ -107,6 +150,17 @@ namespace CS2AssetPerformanceAuditor.UI
     {
         [DataMember(Name = "collectSubordinateObjects", Order = 1)] public bool CollectSubordinateObjects { get; set; } = true;
         [DataMember(Name = "collectNetworkEdges", Order = 2)] public bool CollectNetworkEdges { get; set; } = true;
+        [DataMember(Name = "frameBudgetMs", Order = 3)] public double FrameBudgetMs { get; set; } = 1.0;
+        [DataMember(Name = "progressUpdateMs", Order = 4)] public int ProgressUpdateMs { get; set; } = 200;
+        [DataMember(Name = "refreshCatalogAtScanStart", Order = 5)] public bool RefreshCatalogAtScanStart { get; set; } = true;
+        [DataMember(Name = "enableHeuristicFindings", Order = 6)] public bool EnableHeuristicFindings { get; set; } = true;
+        [DataMember(Name = "enablePeerOutliers", Order = 7)] public bool EnablePeerOutliers { get; set; } = true;
+        [DataMember(Name = "comparisonPopulation", Order = 8)] public string ComparisonPopulation { get; set; } = "SameCategory";
+        [DataMember(Name = "showNoticeFindings", Order = 9)] public bool ShowNoticeFindings { get; set; } = true;
+        [DataMember(Name = "pageSize", Order = 10)] public int PageSize { get; set; } = 100;
+        [DataMember(Name = "metadataCacheLimit", Order = 11)] public int MetadataCacheLimit { get; set; } = 512;
+        [DataMember(Name = "deepInspectionLimit", Order = 12)] public int DeepInspectionLimit { get; set; } = 1;
+        [DataMember(Name = "uiScale", Order = 13)] public double UiScale { get; set; } = 1.0;
     }
 
     [DataContract]

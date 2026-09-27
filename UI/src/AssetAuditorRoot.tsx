@@ -3,6 +3,7 @@ import {
   createAssetQuery,
   createEscapeCloseHandler,
   nativeBindings,
+  normalizeUiSettings,
   updateAssetQueryState,
   useAuditorSnapshot,
   useExportedReport,
@@ -10,8 +11,10 @@ import {
 import { ScanStatus } from "./components/ScanStatus";
 import { AssetsTab } from "./tabs/AssetsTab";
 import { CensusTab } from "./tabs/CensusTab";
+import { CompareTab } from "./tabs/CompareTab";
 import { OverviewTab } from "./tabs/OverviewTab";
 import { SettingsTab } from "./tabs/SettingsTab";
+import { WarningsTab } from "./tabs/WarningsTab";
 import {
   DEFAULT_ASSET_QUERY_STATE,
   DEFAULT_SCAN_OPTIONS,
@@ -20,7 +23,7 @@ import {
   type UiSnapshot,
 } from "./types";
 
-type AuditorTab = "Overview" | "Assets" | "Census" | "Settings";
+type AuditorTab = "Overview" | "Assets" | "Census" | "Warnings" | "Compare" | "Settings";
 
 interface AssetAuditorRootProps {
   snapshot?: UiSnapshot;
@@ -29,7 +32,7 @@ interface AssetAuditorRootProps {
   exportedReport?: string;
 }
 
-const tabs: AuditorTab[] = ["Overview", "Assets", "Census", "Settings"];
+const tabs: AuditorTab[] = ["Overview", "Assets", "Census", "Warnings", "Compare", "Settings"];
 
 export function AssetAuditorRoot({
   snapshot: suppliedSnapshot,
@@ -44,7 +47,8 @@ export function AssetAuditorRoot({
   const [open, setOpen] = useState(initiallyOpen);
   const [activeTab, setActiveTab] = useState<AuditorTab>("Overview");
   const [query, setQuery] = useState<AssetQueryState>(DEFAULT_ASSET_QUERY_STATE);
-  const settings = snapshot.settings ?? DEFAULT_SCAN_OPTIONS;
+  const settings = normalizeUiSettings(snapshot.settings ?? DEFAULT_SCAN_OPTIONS);
+  const findings = snapshot.findings ?? [];
 
   useEffect(() => {
     if (!open) return;
@@ -61,67 +65,46 @@ export function AssetAuditorRoot({
     return () => window.removeEventListener("keydown", closeOnEscape as (event: KeyboardEvent) => void);
   }, [open]);
 
+  useEffect(() => {
+    setQuery((current) => current.pageSize === settings.pageSize ? current : { ...current, pageSize: settings.pageSize, offset: 0 });
+  }, [settings.pageSize]);
+
   const updateQuery = (patch: Partial<AssetQueryState>) => {
     setQuery((current) => updateAssetQueryState(current, patch));
   };
 
   const updateSettings = (nextSettings: typeof settings) => {
-    bindings.updateSettings(nextSettings);
+    bindings.updateSettings(normalizeUiSettings(nextSettings));
   };
 
+  const visibleFindings = settings.showNoticeFindings ? findings : findings.filter((finding) => finding.status !== "Notice");
+
   return (
-    <main className="asset-auditor" aria-label="CS2 Asset Performance Auditor">
+    <main className="asset-auditor" aria-label="CS2 Asset Performance Auditor" style={{ fontSize: `${settings.uiScale}em` }}>
       <h1 className="apa__sr-only">CS2 Asset Performance Auditor</h1>
       {!open ? (
-        <button type="button" className="apa__launcher" onClick={() => setOpen(true)}>
-          Asset Auditor
-        </button>
+        <button type="button" className="apa__launcher" onClick={() => setOpen(true)}>Asset Auditor</button>
       ) : (
         <section className="apa__panel" role="dialog" aria-label="CS2 Asset Performance Auditor">
           <header className="apa__panel-header">
-            <div>
-              <p className="apa__eyebrow">Cities: Skylines II</p>
-              <h1>Asset Performance Auditor</h1>
-            </div>
-            <button
-              type="button"
-              className="apa__icon-button"
-              aria-label="Close Auditor panel"
-              title="Close"
-              onClick={() => setOpen(false)}
-            >
-              ×
-            </button>
+            <div><p className="apa__eyebrow">Cities: Skylines II</p><h1>Asset Performance Auditor</h1></div>
+            <button type="button" className="apa__icon-button" aria-label="Close Auditor panel" title="Close" onClick={() => setOpen(false)}>×</button>
           </header>
-          <ScanStatus
-            scan={snapshot.scanStatus}
-            onCancel={() => bindings.cancelCensus()}
-          />
+          <ScanStatus scan={snapshot.scanStatus} onCancel={() => bindings.cancelCensus()} />
           <nav className="apa__tabs" aria-label="Auditor views">
             {tabs.map((tab) => (
-              <button
-                type="button"
-                key={tab}
-                className={`apa__tab ${activeTab === tab ? "apa__tab--active" : ""}`}
-                aria-current={activeTab === tab ? "page" : undefined}
-                onClick={() => setActiveTab(tab)}
-              >
-                {tab}
-              </button>
+              <button type="button" key={tab} className={`apa__tab ${activeTab === tab ? "apa__tab--active" : ""}`} aria-current={activeTab === tab ? "page" : undefined} onClick={() => setActiveTab(tab)}>{tab}</button>
             ))}
           </nav>
           <div className="apa__panel-body">
             {activeTab === "Overview" ? <OverviewTab snapshot={snapshot} bindings={bindings} /> : null}
-            {activeTab === "Assets" ? (
-              <AssetsTab page={snapshot.assetPage} query={query} onQueryChange={updateQuery} />
-            ) : null}
+            {activeTab === "Assets" ? <AssetsTab page={snapshot.assetPage} query={query} onQueryChange={updateQuery} findings={visibleFindings} /> : null}
             {activeTab === "Census" ? <CensusTab snapshot={snapshot} /> : null}
+            {activeTab === "Warnings" ? <WarningsTab findings={visibleFindings} /> : null}
+            {activeTab === "Compare" ? <CompareTab assets={snapshot.assetPage.items.slice(0, 4)} findings={visibleFindings} /> : null}
             {activeTab === "Settings" ? <SettingsTab settings={settings} onChange={updateSettings} /> : null}
             {exportedReport ? (
-              <details className="apa__export-result">
-                <summary>Phase 1 JSON report is ready</summary>
-                <textarea aria-label="Export JSON" readOnly value={exportedReport} />
-              </details>
+              <details className="apa__export-result"><summary>Audit JSON report is ready</summary><textarea aria-label="Export JSON" readOnly value={exportedReport} /></details>
             ) : null}
           </div>
         </section>

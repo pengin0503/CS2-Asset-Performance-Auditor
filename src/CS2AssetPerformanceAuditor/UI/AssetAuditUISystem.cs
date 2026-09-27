@@ -16,8 +16,6 @@ namespace CS2AssetPerformanceAuditor.UI
 {
     public sealed class AssetAuditUISystem : UISystemBase
     {
-        private static readonly TimeSpan PublishInterval = TimeSpan.FromMilliseconds(200);
-
         private readonly UiSnapshotBuilder _snapshotBuilder = new UiSnapshotBuilder();
         private readonly DiagnosticAggregator _diagnostics = new DiagnosticAggregator();
         private readonly AuditReportSerializer _reportSerializer = new AuditReportSerializer();
@@ -29,15 +27,13 @@ namespace CS2AssetPerformanceAuditor.UI
         private CensusSnapshot? _lastCensus;
         private long _lastCatalogGeneration = -1;
         private AssetQuery _assetQuery = new AssetQuery();
-        private AssetPage _assetPage = new AssetPage(Array.AsReadOnly(new AssetPageItem[0]), 0, 0, AssetQuery.DefaultPageSize);
-        private ScanOptions _scanOptions = ScanOptions.Default;
+        private UiScanOptions _uiSettings = new UiScanOptions();
         private string? _lastSnapshotJson;
         private DateTimeOffset _lastPublishedAt;
 
         protected override void OnCreate()
         {
             base.OnCreate();
-
             _snapshotBinding = new ValueBinding<string>(UiBindingContract.Group, UiBindingContract.Snapshot, "{}");
             _exportBinding = new ValueBinding<string>(UiBindingContract.Group, UiBindingContract.ExportedReport, string.Empty);
             AddBinding(_snapshotBinding);
@@ -47,7 +43,6 @@ namespace CS2AssetPerformanceAuditor.UI
             AddBinding(new TriggerBinding<string>(UiBindingContract.Group, UiBindingContract.QueryAssets, HandleQueryAssets, new Colossal.UI.Binding.StringReader()));
             AddBinding(new TriggerBinding(UiBindingContract.Group, UiBindingContract.RequestExport, HandleRequestExport));
             AddBinding(new TriggerBinding<string>(UiBindingContract.Group, UiBindingContract.UpdateSettings, HandleUpdateSettings, new Colossal.UI.Binding.StringReader()));
-
             RefreshAssetPage(GetAuditSystem(), force: true);
             PublishSnapshot(force: true);
         }
@@ -55,11 +50,11 @@ namespace CS2AssetPerformanceAuditor.UI
         protected override void OnUpdate()
         {
             base.OnUpdate();
-
             var auditSystem = GetAuditSystem();
             var dataChanged = RefreshAssetPage(auditSystem, force: false);
             var now = DateTimeOffset.UtcNow;
-            if (dataChanged || now - _lastPublishedAt >= PublishInterval)
+            var publishInterval = TimeSpan.FromMilliseconds(_uiSettings.ProgressUpdateMs);
+            if (dataChanged || now - _lastPublishedAt >= publishInterval)
                 PublishSnapshot(force: dataChanged);
         }
 
@@ -84,10 +79,10 @@ namespace CS2AssetPerformanceAuditor.UI
             try
             {
                 if (UiSnapshotBuilder.TryDeserialize<UiScanOptions>(optionsJson, out var options))
-                    _scanOptions = new ScanOptions(options.CollectSubordinateObjects, options.CollectNetworkEdges);
-
+                    _uiSettings = NormalizeSettings(options);
+                var scanOptions = new ScanOptions(_uiSettings.CollectSubordinateObjects, _uiSettings.CollectNetworkEdges);
                 InvalidateExport();
-                GetAuditSystem()?.RequestCensusScan(_scanOptions);
+                GetAuditSystem()?.RequestCensusScan(scanOptions);
                 PublishSnapshot(force: true);
             }
             catch
@@ -109,7 +104,6 @@ namespace CS2AssetPerformanceAuditor.UI
             {
                 if (!UiSnapshotBuilder.TryDeserialize<UiAssetQueryRequest>(queryJson, out var request))
                     throw new ArgumentException("The asset query payload was invalid.");
-
                 _assetQuery = CreateAssetQuery(request);
                 RefreshAssetPage(GetAuditSystem(), force: true);
                 PublishSnapshot(force: true);
@@ -126,8 +120,8 @@ namespace CS2AssetPerformanceAuditor.UI
             try
             {
                 if (!UiSnapshotBuilder.TryDeserialize<UiScanOptions>(settingsJson, out var options))
-                    throw new ArgumentException("The scan settings payload was invalid.");
-                _scanOptions = new ScanOptions(options.CollectSubordinateObjects, options.CollectNetworkEdges);
+                    throw new ArgumentException("The settings payload was invalid.");
+                _uiSettings = NormalizeSettings(options);
                 PublishSnapshot(force: true);
             }
             catch
@@ -142,7 +136,6 @@ namespace CS2AssetPerformanceAuditor.UI
             var auditSystem = GetAuditSystem();
             if (auditSystem?.Capabilities == null || _exportBinding == null)
                 return;
-
             try
             {
                 var report = _reportBuilder.Build(
@@ -158,7 +151,7 @@ namespace CS2AssetPerformanceAuditor.UI
             }
             catch
             {
-                _diagnostics.Add("APA-EXP-001", "phase_one_report_export_failed");
+                _diagnostics.Add("APA-EXP-001", "audit_report_export_failed");
                 _exportBinding.Update("{\"errorCode\":\"APA-EXP-001\"}");
             }
         }
@@ -173,10 +166,8 @@ namespace CS2AssetPerformanceAuditor.UI
             var changed = force || underlyingDataChanged;
             if (!changed)
                 return false;
-
             if (underlyingDataChanged && _lastAuditSystem != null)
                 InvalidateExport();
-
             var records = auditSystem?.CatalogRecords ?? Array.Empty<PrefabRecord>();
             var service = new AssetQueryService(records, census, catalogGeneration);
             _assetPage = service.Query(_assetQuery);
@@ -186,24 +177,20 @@ namespace CS2AssetPerformanceAuditor.UI
             return true;
         }
 
-        private void InvalidateExport()
-        {
-            _exportBinding?.Update(string.Empty);
-        }
+        private void InvalidateExport() => _exportBinding?.Update(string.Empty);
 
         private void PublishSnapshot(bool force)
         {
             if (_snapshotBinding == null)
                 return;
-
             var auditSystem = GetAuditSystem();
-            var snapshot = _snapshotBuilder.Build(auditSystem, _assetPage, _scanOptions, ProjectInfo.ModVersion);
+            var snapshot = _snapshotBuilder.Build(auditSystem, _assetPage, _uiSettings, ProjectInfo.ModVersion);
             var json = UiSnapshotBuilder.Serialize(snapshot);
+            var publishInterval = TimeSpan.FromMilliseconds(_uiSettings.ProgressUpdateMs);
             if (!force && StringComparer.Ordinal.Equals(json, _lastSnapshotJson))
                 return;
-            if (!force && DateTimeOffset.UtcNow - _lastPublishedAt < PublishInterval)
+            if (!force && DateTimeOffset.UtcNow - _lastPublishedAt < publishInterval)
                 return;
-
             _snapshotBinding.Update(json);
             _lastSnapshotJson = json;
             _lastPublishedAt = DateTimeOffset.UtcNow;
@@ -215,14 +202,48 @@ namespace CS2AssetPerformanceAuditor.UI
             var sourceFilter = ParseEnum(request.SourceFilter, AssetSourceFilter.Any);
             var presenceFilter = ParseOptionalEnum<CensusPresence>(request.PresenceFilter);
             var sort = ParseEnum(request.Sort, AssetSort.DisplayNameAscending);
-            return new AssetQuery(
-                request.SearchText,
-                traitFilter,
-                sourceFilter,
-                presenceFilter,
-                sort,
-                request.Offset,
-                Math.Max(1, request.Limit));
+            return new AssetQuery(request.SearchText, traitFilter, sourceFilter, presenceFilter, sort, request.Offset, Math.Min(AssetQueryService.MaximumPageSize, Math.Max(1, request.Limit)));
+        }
+
+        private static UiScanOptions NormalizeSettings(UiScanOptions options)
+        {
+            return new UiScanOptions
+            {
+                CollectSubordinateObjects = options.CollectSubordinateObjects,
+                CollectNetworkEdges = options.CollectNetworkEdges,
+                FrameBudgetMs = Clamp(options.FrameBudgetMs, 0.25, 8.0, 1.0),
+                ProgressUpdateMs = (int)Clamp(options.ProgressUpdateMs, 50, 2000, 200),
+                RefreshCatalogAtScanStart = options.RefreshCatalogAtScanStart,
+                EnableHeuristicFindings = options.EnableHeuristicFindings,
+                EnablePeerOutliers = options.EnablePeerOutliers,
+                ComparisonPopulation = NormalizePopulation(options.ComparisonPopulation),
+                ShowNoticeFindings = options.ShowNoticeFindings,
+                PageSize = (int)Clamp(options.PageSize, 25, AssetQueryService.MaximumPageSize, 100),
+                MetadataCacheLimit = (int)Clamp(options.MetadataCacheLimit, 64, 4096, 512),
+                DeepInspectionLimit = (int)Clamp(options.DeepInspectionLimit, 1, 16, 1),
+                UiScale = Clamp(options.UiScale, 0.75, 1.5, 1.0)
+            };
+        }
+
+        private static double Clamp(double value, double minimum, double maximum, double fallback)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value))
+                return fallback;
+            return Math.Min(maximum, Math.Max(minimum, value));
+        }
+
+        private static string NormalizePopulation(string? value)
+        {
+            switch (value)
+            {
+                case "BuiltinDlc":
+                case "Custom":
+                case "SameSourcePack":
+                case "SameCategory":
+                    return value;
+                default:
+                    return "SameCategory";
+            }
         }
 
         private static T ParseEnum<T>(string? value, T fallback) where T : struct
@@ -235,7 +256,7 @@ namespace CS2AssetPerformanceAuditor.UI
 
         private static T? ParseOptionalEnum<T>(string? value) where T : struct
         {
-            if (string.IsNullOrWhiteSpace(value) || !Enum.TryParse(value, ignoreCase: false, out T parsed))
+            if (string.IsNullOrWhiteSpace(value) || !Enum.TryParse(value, ignoreCase: false, out T parsed) || !Enum.IsDefined(typeof(T), parsed))
                 return null;
             return parsed;
         }

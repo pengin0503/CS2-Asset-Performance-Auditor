@@ -18,16 +18,23 @@ namespace CS2AssetPerformanceAuditor.UI
         private CensusSnapshot? _cachedCensus;
         private UiCensusCounts? _cachedCensusCounts;
 
-        public UiSnapshot Build(
-            AssetAuditSystem? auditSystem,
-            AssetPage assetPage,
-            ScanOptions scanOptions,
-            string modVersion)
+        public UiSnapshot Build(AssetAuditSystem? auditSystem, AssetPage assetPage, ScanOptions scanOptions, string modVersion)
+        {
+            if (scanOptions == null)
+                throw new ArgumentNullException(nameof(scanOptions));
+            return Build(auditSystem, assetPage, new UiScanOptions
+            {
+                CollectSubordinateObjects = scanOptions.CollectSubordinateObjects,
+                CollectNetworkEdges = scanOptions.CollectNetworkEdges
+            }, modVersion);
+        }
+
+        public UiSnapshot Build(AssetAuditSystem? auditSystem, AssetPage assetPage, UiScanOptions settings, string modVersion)
         {
             if (assetPage == null)
                 throw new ArgumentNullException(nameof(assetPage));
-            if (scanOptions == null)
-                throw new ArgumentNullException(nameof(scanOptions));
+            if (settings == null)
+                throw new ArgumentNullException(nameof(settings));
             if (string.IsNullOrWhiteSpace(modVersion))
                 throw new ArgumentException("A mod version is required.", nameof(modVersion));
 
@@ -37,9 +44,7 @@ namespace CS2AssetPerformanceAuditor.UI
             var capabilities = auditSystem?.Capabilities;
             var catalog = auditSystem?.CatalogRecords ?? Array.Empty<PrefabRecord>();
             var catalogGeneration = auditSystem?.CatalogGeneration ?? 0;
-            var catalogCapturedAt = auditSystem != null && catalogGeneration > 0
-                ? FormatTime(auditSystem.CatalogCapturedAt)
-                : null;
+            var catalogCapturedAt = auditSystem != null && catalogGeneration > 0 ? FormatTime(auditSystem.CatalogCapturedAt) : null;
 
             return new UiSnapshot
             {
@@ -74,11 +79,8 @@ namespace CS2AssetPerformanceAuditor.UI
                     CensusCounts = GetCensusCounts(census)
                 },
                 AssetPage = MapPage(assetPage),
-                Settings = new UiScanOptions
-                {
-                    CollectSubordinateObjects = scanOptions.CollectSubordinateObjects,
-                    CollectNetworkEdges = scanOptions.CollectNetworkEdges
-                }
+                Settings = CopySettings(settings),
+                Findings = new UiFinding[0]
             };
         }
 
@@ -86,7 +88,6 @@ namespace CS2AssetPerformanceAuditor.UI
         {
             if (value == null)
                 throw new ArgumentNullException(nameof(value));
-
             var serializer = new DataContractJsonSerializer(typeof(T));
             using (var stream = new MemoryStream())
             {
@@ -100,7 +101,6 @@ namespace CS2AssetPerformanceAuditor.UI
             value = null!;
             if (string.IsNullOrWhiteSpace(json))
                 return false;
-
             try
             {
                 var serializer = new DataContractJsonSerializer(typeof(T));
@@ -118,7 +118,6 @@ namespace CS2AssetPerformanceAuditor.UI
         {
             if (ReferenceEquals(census, _cachedCensus) && _cachedCensusCounts != null)
                 return _cachedCensusCounts;
-
             _cachedCensus = census;
             _cachedCensusCounts = new UiCensusCounts
             {
@@ -130,16 +129,13 @@ namespace CS2AssetPerformanceAuditor.UI
             return _cachedCensusCounts;
         }
 
-        private static UiCensusCounts MapCounters(CensusEntry? entry)
+        private static UiCensusCounts MapCounters(CensusEntry? entry) => new UiCensusCounts
         {
-            return new UiCensusCounts
-            {
-                TopLevelObjects = entry == null ? Unscanned() : MapObservation(entry.Counters.TopLevelObjects),
-                SubordinateObjects = entry == null ? Unscanned() : MapObservation(entry.Counters.SubordinateObjects),
-                LiveObjectReferences = entry == null ? Unscanned() : MapObservation(entry.Counters.LiveObjectReferences),
-                NetworkEdges = entry == null ? Unscanned() : MapObservation(entry.Counters.NetworkEdges)
-            };
-        }
+            TopLevelObjects = entry == null ? Unscanned() : MapObservation(entry.Counters.TopLevelObjects),
+            SubordinateObjects = entry == null ? Unscanned() : MapObservation(entry.Counters.SubordinateObjects),
+            LiveObjectReferences = entry == null ? Unscanned() : MapObservation(entry.Counters.LiveObjectReferences),
+            NetworkEdges = entry == null ? Unscanned() : MapObservation(entry.Counters.NetworkEdges)
+        };
 
         private static UiAssetPage MapPage(AssetPage page)
         {
@@ -158,7 +154,15 @@ namespace CS2AssetPerformanceAuditor.UI
                     CountKind = item.CountKind.ToString(),
                     Instances = MapObservation(item.Instances),
                     Presence = item.Presence.ToString(),
-                    Counters = MapCounters(item.CensusEntry)
+                    Counters = MapCounters(item.CensusEntry),
+                    RenderCoverage = Availability.NotScanned.ToString(),
+                    EstimatedTexturePayload = Unscanned(),
+                    FindingCount = 0,
+                    Lod0Vertices = Unscanned(),
+                    Lod1RetentionPercent = new UiDoubleObservation { Availability = Availability.NotScanned.ToString(), Origin = ObservationOrigin.Derived.ToString() },
+                    MaterialCount = Unscanned(),
+                    UniqueTextureCount = Unscanned(),
+                    RenderRelations = new UiRenderRelation[0]
                 }).ToArray()
             };
         }
@@ -167,7 +171,6 @@ namespace CS2AssetPerformanceAuditor.UI
         {
             if (census == null)
                 return Unscanned();
-
             long total = 0;
             var foundApplicable = false;
             foreach (var entry in census.Entries)
@@ -175,50 +178,43 @@ namespace CS2AssetPerformanceAuditor.UI
                 var observation = select(entry);
                 if (observation.Availability == Availability.NotApplicable)
                     continue;
-
                 foundApplicable = true;
                 if (!observation.HasValue)
                     return MapObservation(observation);
                 total = checked(total + observation.Value);
             }
-
             if (!foundApplicable)
-                return new UiObservation
-                {
-                    Availability = Availability.NotApplicable.ToString(),
-                    Origin = ObservationOrigin.Derived.ToString(),
-                    CapturedAt = FormatTime(census.CapturedAt)
-                };
-
-            return new UiObservation
-            {
-                Availability = Availability.Available.ToString(),
-                Value = total,
-                Origin = ObservationOrigin.Derived.ToString(),
-                CapturedAt = FormatTime(census.CapturedAt)
-            };
+                return new UiObservation { Availability = Availability.NotApplicable.ToString(), Origin = ObservationOrigin.Derived.ToString(), CapturedAt = FormatTime(census.CapturedAt) };
+            return new UiObservation { Availability = Availability.Available.ToString(), Value = total, Origin = ObservationOrigin.Derived.ToString(), CapturedAt = FormatTime(census.CapturedAt) };
         }
 
-        private static UiObservation MapObservation(Observation<long> observation)
+        private static UiObservation MapObservation(Observation<long> observation) => new UiObservation
         {
-            return new UiObservation
-            {
-                Availability = observation.Availability.ToString(),
-                Value = observation.HasValue ? observation.Value : (long?)null,
-                Origin = observation.Origin.ToString(),
-                CapturedAt = FormatTime(observation.CapturedAt),
-                DiagnosticCode = observation.DiagnosticCode
-            };
-        }
+            Availability = observation.Availability.ToString(),
+            Value = observation.HasValue ? observation.Value : (long?)null,
+            Origin = observation.Origin.ToString(),
+            CapturedAt = FormatTime(observation.CapturedAt),
+            DiagnosticCode = observation.DiagnosticCode
+        };
 
-        private static UiObservation Unscanned()
+        private static UiObservation Unscanned() => new UiObservation { Availability = Availability.NotScanned.ToString(), Origin = ObservationOrigin.Derived.ToString() };
+
+        private static UiScanOptions CopySettings(UiScanOptions settings) => new UiScanOptions
         {
-            return new UiObservation
-            {
-                Availability = Availability.NotScanned.ToString(),
-                Origin = ObservationOrigin.Ecs.ToString()
-            };
-        }
+            CollectSubordinateObjects = settings.CollectSubordinateObjects,
+            CollectNetworkEdges = settings.CollectNetworkEdges,
+            FrameBudgetMs = settings.FrameBudgetMs,
+            ProgressUpdateMs = settings.ProgressUpdateMs,
+            RefreshCatalogAtScanStart = settings.RefreshCatalogAtScanStart,
+            EnableHeuristicFindings = settings.EnableHeuristicFindings,
+            EnablePeerOutliers = settings.EnablePeerOutliers,
+            ComparisonPopulation = settings.ComparisonPopulation,
+            ShowNoticeFindings = settings.ShowNoticeFindings,
+            PageSize = settings.PageSize,
+            MetadataCacheLimit = settings.MetadataCacheLimit,
+            DeepInspectionLimit = settings.DeepInspectionLimit,
+            UiScale = settings.UiScale
+        };
 
         private static string GetSourceLabel(AssetOriginEvidence evidence)
         {
@@ -227,8 +223,7 @@ namespace CS2AssetPerformanceAuditor.UI
             if (evidence.IsSubscribedMod == true) labels.Add("Subscribed mod");
             if (evidence.IsPackaged == true) labels.Add("Packaged");
             if (labels.Count > 0) return string.Join(" + ", labels);
-            if (evidence.IsBuiltin == false && evidence.IsSubscribedMod == false && evidence.IsPackaged == false)
-                return "No source flags";
+            if (evidence.IsBuiltin == false && evidence.IsSubscribedMod == false && evidence.IsPackaged == false) return "No source flags";
             return "Unknown";
         }
 

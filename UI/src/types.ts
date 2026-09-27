@@ -18,12 +18,36 @@ export type CensusPresence =
   | "NotApplicable"
   | "Unknown";
 
+export type FindingStatus = "Warning" | "PotentialIssue" | "Notice" | "Observed";
+export type FindingCategory = "Geometry" | "Lod" | "Material" | "Texture" | "Exposure" | "Integrity";
+export type RenderCoverage = Availability | "Unknown";
+
 export interface UiObservation<T = number> {
   availability: Availability;
   value?: T | null;
   origin?: string;
   capturedAt?: string;
   diagnosticCode?: string | null;
+}
+
+export interface UiFinding {
+  ruleId: string;
+  status: FindingStatus;
+  category: FindingCategory;
+  title: string;
+  explanation: string;
+  evidence: string[];
+  basis: string;
+  ruleVersion: string;
+  prefabId?: string | null;
+  prefabType?: string | null;
+}
+
+export interface UiRenderRelation {
+  kind: string;
+  from: string;
+  to: string;
+  lodLevel?: number | null;
 }
 
 export interface AssetRow {
@@ -41,6 +65,14 @@ export interface AssetRow {
     liveObjectReferences: UiObservation<number>;
     networkEdges: UiObservation<number>;
   };
+  renderCoverage?: RenderCoverage;
+  estimatedTexturePayload?: UiObservation<number>;
+  findingCount?: number;
+  lod0Vertices?: UiObservation<number>;
+  lod1RetentionPercent?: UiObservation<number>;
+  materialCount?: UiObservation<number>;
+  uniqueTextureCount?: UiObservation<number>;
+  renderRelations?: UiRenderRelation[];
 }
 
 export interface AssetPage {
@@ -96,6 +128,17 @@ export interface ScanStatusData {
 export interface UiScanOptions {
   collectSubordinateObjects: boolean;
   collectNetworkEdges: boolean;
+  frameBudgetMs: number;
+  progressUpdateMs: number;
+  refreshCatalogAtScanStart: boolean;
+  enableHeuristicFindings: boolean;
+  enablePeerOutliers: boolean;
+  comparisonPopulation: "SameCategory" | "BuiltinDlc" | "Custom" | "SameSourcePack";
+  showNoticeFindings: boolean;
+  pageSize: number;
+  metadataCacheLimit: number;
+  deepInspectionLimit: number;
+  uiScale: number;
 }
 
 export interface UiCensusCounts {
@@ -126,6 +169,7 @@ export interface UiSnapshot {
   summary: UiSummary;
   assetPage: AssetPage;
   settings: UiScanOptions;
+  findings?: UiFinding[];
 }
 
 export interface AssetAuditorBindings {
@@ -151,6 +195,17 @@ export const DEFAULT_ASSET_QUERY_STATE: AssetQueryState = {
 export const DEFAULT_SCAN_OPTIONS: UiScanOptions = {
   collectSubordinateObjects: true,
   collectNetworkEdges: true,
+  frameBudgetMs: 1,
+  progressUpdateMs: 200,
+  refreshCatalogAtScanStart: true,
+  enableHeuristicFindings: true,
+  enablePeerOutliers: true,
+  comparisonPopulation: "SameCategory",
+  showNoticeFindings: true,
+  pageSize: 100,
+  metadataCacheLimit: 512,
+  deepInspectionLimit: 1,
+  uiScale: 1,
 };
 
 export const EMPTY_OBSERVATION: UiObservation<number> = {
@@ -189,4 +244,5 @@ export const EMPTY_UI_SNAPSHOT: UiSnapshot = {
   },
   assetPage: { offset: 0, limit: 100, totalCount: 0, items: [] },
   settings: DEFAULT_SCAN_OPTIONS,
+  findings: [],
 };

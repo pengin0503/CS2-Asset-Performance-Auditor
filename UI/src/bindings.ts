@@ -1,6 +1,7 @@
 import { bindValue, trigger, useValue } from "cs2/api";
 import {
   DEFAULT_ASSET_QUERY_STATE,
+  DEFAULT_SCAN_OPTIONS,
   EMPTY_UI_SNAPSHOT,
   MAX_ASSET_PAGE_SIZE,
   type AssetAuditorBindings,
@@ -27,7 +28,7 @@ export function useExportedReport(): string {
 
 export const nativeBindings: AssetAuditorBindings = {
   requestCensus(options: UiScanOptions): void {
-    trigger(UI_BINDING_GROUP, "requestCensus", JSON.stringify(options));
+    trigger(UI_BINDING_GROUP, "requestCensus", JSON.stringify(normalizeUiSettings(options)));
   },
   cancelCensus(): void {
     trigger(UI_BINDING_GROUP, "cancelCensus");
@@ -39,7 +40,7 @@ export const nativeBindings: AssetAuditorBindings = {
     trigger(UI_BINDING_GROUP, "requestExport");
   },
   updateSettings(options: UiScanOptions): void {
-    trigger(UI_BINDING_GROUP, "updateSettings", JSON.stringify(options));
+    trigger(UI_BINDING_GROUP, "updateSettings", JSON.stringify(normalizeUiSettings(options)));
   },
 };
 
@@ -67,6 +68,24 @@ export function updateAssetQueryState(
     ...patch,
     offset: patch.offset ?? (changesFilter ? 0 : current.offset),
   };
+}
+
+export function normalizeUiSettings(settings: Partial<UiScanOptions>): UiScanOptions {
+  const merged = { ...DEFAULT_SCAN_OPTIONS, ...settings };
+  return {
+    ...merged,
+    frameBudgetMs: clampFinite(merged.frameBudgetMs, 0.25, 8, DEFAULT_SCAN_OPTIONS.frameBudgetMs),
+    progressUpdateMs: clampFinite(merged.progressUpdateMs, 50, 2000, DEFAULT_SCAN_OPTIONS.progressUpdateMs),
+    pageSize: Math.round(clampFinite(merged.pageSize, 25, MAX_ASSET_PAGE_SIZE, DEFAULT_SCAN_OPTIONS.pageSize)),
+    metadataCacheLimit: Math.round(clampFinite(merged.metadataCacheLimit, 64, 4096, DEFAULT_SCAN_OPTIONS.metadataCacheLimit)),
+    deepInspectionLimit: Math.round(clampFinite(merged.deepInspectionLimit, 1, 16, DEFAULT_SCAN_OPTIONS.deepInspectionLimit)),
+    uiScale: clampFinite(merged.uiScale, 0.75, 1.5, DEFAULT_SCAN_OPTIONS.uiScale),
+  };
+}
+
+function clampFinite(value: number, minimum: number, maximum: number, fallback: number): number {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(maximum, Math.max(minimum, value));
 }
 
 export function formatObservation(observation: UiObservation<number>): string {
@@ -115,7 +134,12 @@ function parseSnapshot(raw: string): UiSnapshot {
   try {
     const value: unknown = JSON.parse(raw);
     if (value && typeof value === "object" && "scanStatus" in value) {
-      return value as UiSnapshot;
+      const snapshot = value as UiSnapshot;
+      return {
+        ...snapshot,
+        settings: normalizeUiSettings(snapshot.settings ?? DEFAULT_SCAN_OPTIONS),
+        findings: snapshot.findings ?? [],
+      };
     }
   } catch {
     // A malformed/missing binding keeps the documented empty view available.

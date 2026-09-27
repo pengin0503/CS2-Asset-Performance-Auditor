@@ -38,6 +38,140 @@ namespace CS2AssetPerformanceAuditor.Export
     public sealed class ReportAnalysis
     {
         [DataMember(Name = "findings", Order = 1)] public ReportFinding[] Findings { get; set; } = new ReportFinding[0];
+        [DataMember(Name = "assets", Order = 2)] public ReportAssetAnalysis[] Assets { get; set; } = new ReportAssetAnalysis[0];
+        [DataMember(Name = "renderAssets", Order = 3)] public ReportRenderAssetAnalysis[] RenderAssets { get; set; } = new ReportRenderAssetAnalysis[0];
+    }
+
+    [DataContract]
+    public sealed class ReportAssetAnalysis
+    {
+        [DataMember(Name = "prefabId", Order = 1)] public string PrefabId { get; set; } = string.Empty;
+        [DataMember(Name = "prefabType", Order = 2)] public string PrefabType { get; set; } = string.Empty;
+        [DataMember(Name = "renderCoverage", Order = 3)] public string RenderCoverage { get; set; } = "Unknown";
+        [DataMember(Name = "lod0Vertices", Order = 4)] public ReportObservation Lod0Vertices { get; set; } = new ReportObservation();
+        [DataMember(Name = "lod1RetentionPercent", Order = 5)] public ReportDoubleObservation Lod1RetentionPercent { get; set; } = new ReportDoubleObservation();
+        [DataMember(Name = "materialCount", Order = 6)] public ReportObservation MaterialCount { get; set; } = new ReportObservation();
+        [DataMember(Name = "uniqueTextureCount", Order = 7)] public ReportObservation UniqueTextureCount { get; set; } = new ReportObservation();
+        [DataMember(Name = "estimatedTexturePayload", Order = 8)] public ReportObservation EstimatedTexturePayload { get; set; } = new ReportObservation();
+        [DataMember(Name = "renderRelations", Order = 9)] public ReportRenderRelation[] RenderRelations { get; set; } = new ReportRenderRelation[0];
+    }
+
+    [DataContract]
+    public sealed class ReportRenderRelation
+    {
+        [DataMember(Name = "kind", Order = 1)] public string Kind { get; set; } = string.Empty;
+        [DataMember(Name = "renderAssetId", Order = 2)] public string RenderAssetId { get; set; } = string.Empty;
+        [DataMember(Name = "renderAssetType", Order = 3)] public string RenderAssetType { get; set; } = string.Empty;
+        [DataMember(Name = "lodLevel", Order = 4, EmitDefaultValue = true)] public int? LodLevel { get; set; }
+    }
+
+    [DataContract]
+    public sealed class ReportRenderAssetAnalysis
+    {
+        [DataMember(Name = "renderAssetId", Order = 1)] public string RenderAssetId { get; set; } = string.Empty;
+        [DataMember(Name = "renderAssetType", Order = 2)] public string RenderAssetType { get; set; } = string.Empty;
+        [DataMember(Name = "displayName", Order = 3)] public string DisplayName { get; set; } = string.Empty;
+        [DataMember(Name = "geometry", Order = 4, EmitDefaultValue = true)] public ReportGeometry? Geometry { get; set; }
+        [DataMember(Name = "surfaces", Order = 5)] public ReportSurface[] Surfaces { get; set; } = new ReportSurface[0];
+        [DataMember(Name = "textures", Order = 6)] public ReportTexture[] Textures { get; set; } = new ReportTexture[0];
+        [DataMember(Name = "deepInspection", Order = 7, EmitDefaultValue = true)] public ReportDeepInspection? DeepInspection { get; set; }
+    }
+
+    [DataContract]
+    public sealed class ReportGeometry
+    {
+        [DataMember(Name = "geometryAssetId", Order = 1)] public string GeometryAssetId { get; set; } = string.Empty;
+        [DataMember(Name = "meshCount", Order = 2)] public ReportObservation MeshCount { get; set; } = new ReportObservation();
+        [DataMember(Name = "totalVertexCount", Order = 3)] public ReportObservation TotalVertexCount { get; set; } = new ReportObservation();
+        [DataMember(Name = "totalIndexCount", Order = 4)] public ReportObservation TotalIndexCount { get; set; } = new ReportObservation();
+        [DataMember(Name = "subMeshCount", Order = 5)] public ReportObservation SubMeshCount { get; set; } = new ReportObservation();
+        [DataMember(Name = "compressedDataSize", Order = 6)] public ReportObservation CompressedDataSize { get; set; } = new ReportObservation();
+        [DataMember(Name = "meshes", Order = 7)] public ReportMesh[] Meshes { get; set; } = new ReportMesh[0];
+    }
+
+    [DataContract]
+    public sealed class ReportMesh
+    {
+        [DataMember(Name = "meshIndex", Order = 1)] public int MeshIndex { get; set; }
+        [DataMember(Name = "vertexCount", Order = 2)] public ReportObservation VertexCount { get; set; } = new ReportObservation();
+        [DataMember(Name = "indexCount", Order = 3)] public ReportObservation IndexCount { get; set; } = new ReportObservation();
+        [DataMember(Name = "indexFormat", Order = 4)] public ReportStringObservation IndexFormat { get; set; } = new ReportStringObservation();
+        [DataMember(Name = "subMeshes", Order = 5)] public ReportSubMesh[] SubMeshes { get; set; } = new ReportSubMesh[0];
+    }
+
+    [DataContract]
+    public sealed class ReportSubMesh
+    {
+        [DataMember(Name = "meshIndex", Order = 1)] public int MeshIndex { get; set; }
+        [DataMember(Name = "subMeshIndex", Order = 2)] public int SubMeshIndex { get; set; }
+        [DataMember(Name = "topology", Order = 3)] public string Topology { get; set; } = string.Empty;
+        [DataMember(Name = "indexCount", Order = 4)] public ReportObservation IndexCount { get; set; } = new ReportObservation();
+        [DataMember(Name = "vertexCount", Order = 5)] public ReportObservation VertexCount { get; set; } = new ReportObservation();
+        [DataMember(Name = "triangleCount", Order = 6)] public ReportObservation TriangleCount { get; set; } = new ReportObservation();
+        [DataMember(Name = "bounds", Order = 7, EmitDefaultValue = true)] public ReportBounds? Bounds { get; set; }
+    }
+
+    [DataContract]
+    public sealed class ReportBounds
+    {
+        [DataMember(Name = "centerX", Order = 1)] public float CenterX { get; set; }
+        [DataMember(Name = "centerY", Order = 2)] public float CenterY { get; set; }
+        [DataMember(Name = "centerZ", Order = 3)] public float CenterZ { get; set; }
+        [DataMember(Name = "extentsX", Order = 4)] public float ExtentsX { get; set; }
+        [DataMember(Name = "extentsY", Order = 5)] public float ExtentsY { get; set; }
+        [DataMember(Name = "extentsZ", Order = 6)] public float ExtentsZ { get; set; }
+    }
+
+    [DataContract]
+    public sealed class ReportSurface
+    {
+        [DataMember(Name = "surfaceAssetId", Order = 1)] public string SurfaceAssetId { get; set; } = string.Empty;
+        [DataMember(Name = "materialTemplateHash", Order = 2)] public ReportObservation MaterialTemplateHash { get; set; } = new ReportObservation();
+        [DataMember(Name = "isVirtualTexturingMaterial", Order = 3)] public ReportBooleanObservation IsVirtualTexturingMaterial { get; set; } = new ReportBooleanObservation();
+        [DataMember(Name = "isCurrentlyUsingVirtualTexturing", Order = 4)] public ReportBooleanObservation IsCurrentlyUsingVirtualTexturing { get; set; } = new ReportBooleanObservation();
+        [DataMember(Name = "floatPropertyCount", Order = 5)] public int FloatPropertyCount { get; set; }
+        [DataMember(Name = "intPropertyCount", Order = 6)] public int IntPropertyCount { get; set; }
+        [DataMember(Name = "vectorPropertyCount", Order = 7)] public int VectorPropertyCount { get; set; }
+        [DataMember(Name = "colorPropertyCount", Order = 8)] public int ColorPropertyCount { get; set; }
+        [DataMember(Name = "keywords", Order = 9)] public string[] Keywords { get; set; } = new string[0];
+        [DataMember(Name = "textureAssetIds", Order = 10)] public string[] TextureAssetIds { get; set; } = new string[0];
+    }
+
+    [DataContract]
+    public sealed class ReportTexture
+    {
+        [DataMember(Name = "textureAssetId", Order = 1)] public string TextureAssetId { get; set; } = string.Empty;
+        [DataMember(Name = "width", Order = 2)] public ReportObservation Width { get; set; } = new ReportObservation();
+        [DataMember(Name = "height", Order = 3)] public ReportObservation Height { get; set; } = new ReportObservation();
+        [DataMember(Name = "depth", Order = 4)] public ReportObservation Depth { get; set; } = new ReportObservation();
+        [DataMember(Name = "format", Order = 5)] public ReportStringObservation Format { get; set; } = new ReportStringObservation();
+        [DataMember(Name = "dimension", Order = 6)] public ReportStringObservation Dimension { get; set; } = new ReportStringObservation();
+        [DataMember(Name = "mipsCount", Order = 7)] public ReportObservation MipsCount { get; set; } = new ReportObservation();
+        [DataMember(Name = "filterMode", Order = 8)] public ReportStringObservation FilterMode { get; set; } = new ReportStringObservation();
+        [DataMember(Name = "wrapMode", Order = 9)] public ReportStringObservation WrapMode { get; set; } = new ReportStringObservation();
+        [DataMember(Name = "anisoLevel", Order = 10)] public ReportObservation AnisoLevel { get; set; } = new ReportObservation();
+        [DataMember(Name = "estimatedLogicalPayload", Order = 11)] public ReportObservation EstimatedLogicalPayload { get; set; } = new ReportObservation();
+    }
+
+    [DataContract]
+    public sealed class ReportDeepInspection
+    {
+        [DataMember(Name = "availability", Order = 1)] public string Availability { get; set; } = string.Empty;
+        [DataMember(Name = "capturedAt", Order = 2)] public string CapturedAt { get; set; } = string.Empty;
+        [DataMember(Name = "diagnosticCode", Order = 3, EmitDefaultValue = true)] public string? DiagnosticCode { get; set; }
+        [DataMember(Name = "materials", Order = 4)] public ReportMaterialBinding[] Materials { get; set; } = new ReportMaterialBinding[0];
+        [DataMember(Name = "surfaceAssetIds", Order = 5)] public string[] SurfaceAssetIds { get; set; } = new string[0];
+    }
+
+    [DataContract]
+    public sealed class ReportMaterialBinding
+    {
+        [DataMember(Name = "materialName", Order = 1)] public string MaterialName { get; set; } = string.Empty;
+        [DataMember(Name = "shaderName", Order = 2)] public string ShaderName { get; set; } = string.Empty;
+        [DataMember(Name = "shaderKeywords", Order = 3)] public string[] ShaderKeywords { get; set; } = new string[0];
+        [DataMember(Name = "renderQueue", Order = 4)] public int RenderQueue { get; set; }
+        [DataMember(Name = "passCount", Order = 5)] public int PassCount { get; set; }
+        [DataMember(Name = "enableInstancing", Order = 6)] public bool EnableInstancing { get; set; }
     }
 
     [DataContract]
@@ -88,12 +222,43 @@ namespace CS2AssetPerformanceAuditor.Export
         [DataMember(Name = "paradoxModsPlatformId", Order = 11, EmitDefaultValue = true)] public string? ParadoxModsPlatformId { get; set; }
     }
 
-    [DataContract] public sealed class ReportObservation
+    [DataContract]
+    public sealed class ReportObservation
     {
         [DataMember(Name = "availability", Order = 1)] public string Availability { get; set; } = string.Empty;
         [DataMember(Name = "origin", Order = 2)] public string Origin { get; set; } = string.Empty;
         [DataMember(Name = "capturedAt", Order = 3)] public string CapturedAt { get; set; } = string.Empty;
         [DataMember(Name = "value", Order = 4, EmitDefaultValue = true)] public long? Value { get; set; }
+        [DataMember(Name = "diagnosticCode", Order = 5, EmitDefaultValue = true)] public string? DiagnosticCode { get; set; }
+    }
+
+    [DataContract]
+    public sealed class ReportDoubleObservation
+    {
+        [DataMember(Name = "availability", Order = 1)] public string Availability { get; set; } = string.Empty;
+        [DataMember(Name = "origin", Order = 2)] public string Origin { get; set; } = string.Empty;
+        [DataMember(Name = "capturedAt", Order = 3)] public string CapturedAt { get; set; } = string.Empty;
+        [DataMember(Name = "value", Order = 4, EmitDefaultValue = true)] public double? Value { get; set; }
+        [DataMember(Name = "diagnosticCode", Order = 5, EmitDefaultValue = true)] public string? DiagnosticCode { get; set; }
+    }
+
+    [DataContract]
+    public sealed class ReportStringObservation
+    {
+        [DataMember(Name = "availability", Order = 1)] public string Availability { get; set; } = string.Empty;
+        [DataMember(Name = "origin", Order = 2)] public string Origin { get; set; } = string.Empty;
+        [DataMember(Name = "capturedAt", Order = 3)] public string CapturedAt { get; set; } = string.Empty;
+        [DataMember(Name = "value", Order = 4, EmitDefaultValue = true)] public string? Value { get; set; }
+        [DataMember(Name = "diagnosticCode", Order = 5, EmitDefaultValue = true)] public string? DiagnosticCode { get; set; }
+    }
+
+    [DataContract]
+    public sealed class ReportBooleanObservation
+    {
+        [DataMember(Name = "availability", Order = 1)] public string Availability { get; set; } = string.Empty;
+        [DataMember(Name = "origin", Order = 2)] public string Origin { get; set; } = string.Empty;
+        [DataMember(Name = "capturedAt", Order = 3)] public string CapturedAt { get; set; } = string.Empty;
+        [DataMember(Name = "value", Order = 4, EmitDefaultValue = true)] public bool? Value { get; set; }
         [DataMember(Name = "diagnosticCode", Order = 5, EmitDefaultValue = true)] public string? DiagnosticCode { get; set; }
     }
 

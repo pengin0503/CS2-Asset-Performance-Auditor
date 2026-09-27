@@ -10,15 +10,25 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Rendering
     public sealed class RenderGraphSnapshot
     {
         private readonly IReadOnlyDictionary<PrefabKey, RenderCoverage> _coverage;
-        internal RenderGraphSnapshot(IDictionary<PrefabKey, RenderCoverage> coverage, IEnumerable<RenderAssetRecord> renderAssets, IEnumerable<PrefabRenderRelation> relations)
+        private readonly IReadOnlyDictionary<RenderAssetKey, object> _runtimeAssets;
+
+        internal RenderGraphSnapshot(
+            IDictionary<PrefabKey, RenderCoverage> coverage,
+            IEnumerable<RenderAssetRecord> renderAssets,
+            IEnumerable<PrefabRenderRelation> relations,
+            IDictionary<RenderAssetKey, object>? runtimeAssets = null)
         {
             _coverage = new ReadOnlyDictionary<PrefabKey, RenderCoverage>(new Dictionary<PrefabKey, RenderCoverage>(coverage));
+            _runtimeAssets = new ReadOnlyDictionary<RenderAssetKey, object>(new Dictionary<RenderAssetKey, object>(runtimeAssets ?? new Dictionary<RenderAssetKey, object>()));
             RenderAssets = Array.AsReadOnly(renderAssets.ToArray());
             Relations = Array.AsReadOnly(relations.ToArray());
         }
+
         public IReadOnlyList<RenderAssetRecord> RenderAssets { get; }
         public IReadOnlyList<PrefabRenderRelation> Relations { get; }
+        public int RuntimeAssetCount => _runtimeAssets.Count;
         public bool TryGetCoverage(PrefabKey prefabKey, out RenderCoverage coverage) => _coverage.TryGetValue(prefabKey, out coverage);
+        public bool TryGetRuntimeAsset(RenderAssetKey key, out object runtimeAsset) => _runtimeAssets.TryGetValue(key, out runtimeAsset!);
     }
 
     public sealed class RenderGraphBuilder
@@ -35,6 +45,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Rendering
             if (inputs == null) throw new ArgumentNullException(nameof(inputs));
             var coverage = new Dictionary<PrefabKey, RenderCoverage>();
             var assets = new Dictionary<RenderAssetKey, RenderAssetRecord>();
+            var runtimeAssets = new Dictionary<RenderAssetKey, object>();
             var relations = new List<PrefabRenderRelation>();
             var relationKeys = new HashSet<string>(StringComparer.Ordinal);
 
@@ -62,6 +73,8 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Rendering
                 coverage[input.Prefab.Key] = resolution.Coverage;
                 foreach (var asset in resolution.RenderAssets)
                     if (!assets.ContainsKey(asset.Key)) assets.Add(asset.Key, asset);
+                foreach (var binding in resolution.RuntimeAssets)
+                    if (!runtimeAssets.ContainsKey(binding.Key)) runtimeAssets.Add(binding.Key, binding.RuntimeAsset);
 
                 foreach (var relation in resolution.Relations)
                 {
@@ -82,7 +95,8 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Rendering
                     .ThenBy(relation => relation.PrefabKey.PrefabId, StringComparer.Ordinal)
                     .ThenBy(relation => relation.LodLevel ?? -1)
                     .ThenBy(relation => relation.RelationKind)
-                    .ThenBy(relation => relation.RenderAssetKey.RenderAssetId, StringComparer.Ordinal));
+                    .ThenBy(relation => relation.RenderAssetKey.RenderAssetId, StringComparer.Ordinal),
+                runtimeAssets);
         }
     }
 }

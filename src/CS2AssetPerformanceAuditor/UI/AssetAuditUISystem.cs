@@ -86,6 +86,7 @@ namespace CS2AssetPerformanceAuditor.UI
                 if (UiSnapshotBuilder.TryDeserialize<UiScanOptions>(optionsJson, out var options))
                     _scanOptions = new ScanOptions(options.CollectSubordinateObjects, options.CollectNetworkEdges);
 
+                InvalidateExport();
                 GetAuditSystem()?.RequestCensusScan(_scanOptions);
                 PublishSnapshot(force: true);
             }
@@ -166,11 +167,15 @@ namespace CS2AssetPerformanceAuditor.UI
         {
             var catalogGeneration = auditSystem?.CatalogGeneration ?? 0;
             var census = auditSystem?.PublishedCensus;
-            var changed = force || !ReferenceEquals(auditSystem, _lastAuditSystem)
+            var underlyingDataChanged = !ReferenceEquals(auditSystem, _lastAuditSystem)
                 || catalogGeneration != _lastCatalogGeneration
                 || !ReferenceEquals(census, _lastCensus);
+            var changed = force || underlyingDataChanged;
             if (!changed)
                 return false;
+
+            if (underlyingDataChanged && _lastAuditSystem != null)
+                InvalidateExport();
 
             var records = auditSystem?.CatalogRecords ?? Array.Empty<PrefabRecord>();
             var service = new AssetQueryService(records, census, catalogGeneration);
@@ -179,6 +184,11 @@ namespace CS2AssetPerformanceAuditor.UI
             _lastCatalogGeneration = catalogGeneration;
             _lastCensus = census;
             return true;
+        }
+
+        private void InvalidateExport()
+        {
+            _exportBinding?.Update(string.Empty);
         }
 
         private void PublishSnapshot(bool force)

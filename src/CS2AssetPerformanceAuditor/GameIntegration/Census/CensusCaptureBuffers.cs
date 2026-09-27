@@ -51,12 +51,12 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Census
         public void ScheduleObjectCapture(EntityQuery topLevelQuery, EntityQuery? subordinateQuery)
         {
             EnsureNoActiveCapture();
-            _topLevelObjectReferences = topLevelQuery.ToComponentDataListAsync<PrefabRef>(Allocator.TempJob, out _topLevelCaptureHandle);
+            _topLevelObjectReferences = topLevelQuery.ToComponentDataListAsync<PrefabRef>(Allocator.Persistent, out _topLevelCaptureHandle);
             _topLevelCaptureScheduled = true;
             if (subordinateQuery.HasValue)
             {
                 _subordinateObjectReferences = subordinateQuery.Value
-                    .ToComponentDataListAsync<PrefabRef>(Allocator.TempJob, out _subordinateCaptureHandle);
+                    .ToComponentDataListAsync<PrefabRef>(Allocator.Persistent, out _subordinateCaptureHandle);
                 _subordinateCaptureScheduled = true;
             }
         }
@@ -82,7 +82,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Census
         public void ScheduleNetworkCapture(EntityQuery networkQuery)
         {
             EnsureNoActiveCapture();
-            _networkEdgeReferences = networkQuery.ToComponentDataListAsync<PrefabRef>(Allocator.TempJob, out _networkCaptureHandle);
+            _networkEdgeReferences = networkQuery.ToComponentDataListAsync<PrefabRef>(Allocator.Persistent, out _networkCaptureHandle);
             _networkCaptureScheduled = true;
         }
 

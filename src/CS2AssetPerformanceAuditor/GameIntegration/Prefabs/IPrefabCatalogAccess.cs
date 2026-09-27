@@ -11,6 +11,8 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Prefabs
 
         bool HasPendingItems { get; }
 
+        bool HasPendingPublication { get; }
+
         int CapturedEntityCount { get; }
 
         int ProcessedEntityCount { get; }
@@ -19,15 +21,27 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Prefabs
 
         long CatalogGeneration { get; }
 
+        long PendingCatalogGeneration { get; }
+
         DateTimeOffset CatalogCapturedAt { get; }
+
+        DateTimeOffset PendingCapturedAt { get; }
 
         IReadOnlyList<PrefabRecord> PublishedRecords { get; }
 
         IReadOnlyDictionary<Entity, PrefabKey> RuntimeEntityKeys { get; }
 
-        void BeginCapture();
+        IReadOnlyList<PrefabRecord> PendingRecords { get; }
+
+        IReadOnlyDictionary<Entity, PrefabKey> PendingRuntimeEntityKeys { get; }
+
+        void BeginCapture(bool deferPublication = false);
 
         int ProcessNextSlice(int maximumItems);
+
+        void CommitPendingCapture();
+
+        void DiscardPendingCapture();
 
         void CancelCapture();
 

@@ -45,6 +45,27 @@ namespace CS2AssetPerformanceAuditor.Tests
         }
 
         [Test]
+        public void ReportRejectsCensusFromDifferentCatalogGeneration()
+        {
+            var prefab = new PrefabRecord(
+                new PrefabKey("asset-house", "Building"), "House", PrefabTraits.Building,
+                new AssetOriginEvidence(isBuiltin: true));
+            var census = new CensusReducer(new[] { prefab }, 4, 9, CapturedAt, ScanOptions.Default).BuildSnapshot();
+            var capabilities = new CapabilityReport("1.6.2f1", CompatibilityState.Untested,
+                Array.Empty<CapabilityStatus>());
+            var builder = new AuditReportBuilder(new PrivacySanitizer("test-user", "test-host"));
+
+            Assert.Throws<InvalidOperationException>(() => builder.Build(
+                new[] { prefab },
+                catalogGeneration: 10,
+                catalogCapturedAt: CapturedAt,
+                census,
+                capabilities,
+                "0.1.0",
+                CapturedAt));
+        }
+
+        [Test]
         public void IdenticalDiagnosticsAreAggregatedInReport()
         {
             var diagnostics = new DiagnosticAggregator();

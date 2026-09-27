@@ -37,7 +37,7 @@ export function OverviewTab({
       <div className="apa__metric-grid">
         <Metric label="Registered Prefabs" value={String(summary.catalogCount)} detail={`Catalog generation ${summary.catalogGeneration}`} />
         <Metric label="Game version" value={summary.gameVersion} detail={`Compatibility: ${summary.compatibility}`} />
-        <Metric label="Top-level objects" value={<ObservationValue label="Top-level objects" observation={summary.censusCounts.topLevelObjects} />} detail="Buildings, services, and trees" />
+        <Metric label="Top-level objects" value={<ObservationValue label="Top-level objects" observation={summary.censusCounts.topLevelObjects} />} detail="Current top-level object references" />
         <Metric label="Live object references" value={<ObservationValue label="Live object references" observation={summary.censusCounts.liveObjectReferences} />} detail="Top-level plus subordinate objects" />
       </div>
 

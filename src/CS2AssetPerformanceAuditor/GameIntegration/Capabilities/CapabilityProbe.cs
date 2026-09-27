@@ -26,10 +26,10 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Capabilities
                 ProbeIndependently(CapabilityId.PrefabCatalog, () => ProbePrefabCatalog(world)),
                 ProbeIndependently(CapabilityId.ObjectCensus, () => ProbeObjectCensus(world)),
                 ProbeIndependently(CapabilityId.NetworkEdgeCensus, () => ProbeNetworkEdgeCensus(world)),
-                new CapabilityStatus(CapabilityId.GeometryMetadata, CapabilityState.Supported, "geometry_api_contract_available"),
-                new CapabilityStatus(CapabilityId.SubmeshMetadata, CapabilityState.Supported, "geometry_api_contract_available"),
-                new CapabilityStatus(CapabilityId.SurfaceMetadata, CapabilityState.Supported, "surface_api_contract_available"),
-                new CapabilityStatus(CapabilityId.TextureMetadata, CapabilityState.Supported, "texture_api_contract_available"),
+                new CapabilityStatus(CapabilityId.GeometryMetadata, CapabilityState.Unsupported, "collector_not_implemented_phase_1"),
+                new CapabilityStatus(CapabilityId.SubmeshMetadata, CapabilityState.Unsupported, "collector_not_implemented_phase_1"),
+                new CapabilityStatus(CapabilityId.SurfaceMetadata, CapabilityState.Unsupported, "collector_not_implemented_phase_1"),
+                new CapabilityStatus(CapabilityId.TextureMetadata, CapabilityState.Unsupported, "collector_not_implemented_phase_1"),
                 new CapabilityStatus(CapabilityId.ShaderDeepInspection, CapabilityState.Degraded, "deep_shader_inspection_not_implemented"),
                 new CapabilityStatus(CapabilityId.RuntimeGpuResidency, CapabilityState.Unsupported, "runtime_gpu_residency_is_out_of_scope")
             };

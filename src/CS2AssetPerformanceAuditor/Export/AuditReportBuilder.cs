@@ -34,6 +34,8 @@ namespace CS2AssetPerformanceAuditor.Export
                 throw new ArgumentNullException(nameof(capabilities));
             if (string.IsNullOrWhiteSpace(modVersion))
                 throw new ArgumentException("A mod version is required.", nameof(modVersion));
+            if (census != null && census.CatalogGeneration != catalogGeneration)
+                throw new InvalidOperationException("Cannot export a Census snapshot against a different Prefab catalog generation.");
 
             var records = catalog.ToArray();
             var orderedRecords = records

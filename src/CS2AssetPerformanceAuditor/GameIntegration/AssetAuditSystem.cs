@@ -156,9 +156,11 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
                 return;
 
             _catalogGenerationBeforeCapture = _catalog.CatalogGeneration;
+            var deferPublication = CurrentScan?.State == ScanState.Running
+                && CurrentScan.Stage == ScanStage.CapturingCatalog;
             try
             {
-                _catalog.BeginCapture();
+                _catalog.BeginCapture(deferPublication);
                 _catalogCaptureActive = true;
             }
             catch
@@ -187,17 +189,25 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
             }
 
             _catalogCaptureActive = false;
+            if (CurrentScan?.State == ScanState.Running && CurrentScan.Stage == ScanStage.CapturingCatalog)
+            {
+                if (!_catalog.HasPendingPublication || _catalog.PendingCatalogGeneration <= _catalogGenerationBeforeCapture)
+                {
+                    LastDiagnosticCode = "APA-CAT-002";
+                    DegradeCapability(CapabilityId.PrefabCatalog, "catalog_capture_not_staged");
+                    FailCensusScan("APA-CAT-002", CapabilityId.PrefabCatalog, "catalog_capture_not_staged");
+                    return;
+                }
+
+                CurrentScan.TransitionTo(ScanStage.ProcessingCatalog);
+                return;
+            }
+
             if (_catalog.CatalogGeneration <= _catalogGenerationBeforeCapture)
             {
                 LastDiagnosticCode = "APA-CAT-002";
                 DegradeCapability(CapabilityId.PrefabCatalog, "catalog_capture_not_published");
-                if (CurrentScan?.State == ScanState.Running)
-                    FailCensusScan("APA-CAT-002", CapabilityId.PrefabCatalog, "catalog_capture_not_published");
-                return;
             }
-
-            if (CurrentScan?.State == ScanState.Running && CurrentScan.Stage == ScanStage.CapturingCatalog)
-                CurrentScan.TransitionTo(ScanStage.ProcessingCatalog);
         }
 
         private void AdvanceCensusScan()
@@ -213,19 +223,19 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
                 switch (session.Stage)
                 {
                     case ScanStage.ProcessingCatalog:
-                        if (catalog.CatalogGeneration <= _catalogGenerationAtCensusStart)
+                        if (!catalog.HasPendingPublication || catalog.PendingCatalogGeneration <= _catalogGenerationAtCensusStart)
                         {
                             FailCensusScan("APA-CAT-003", CapabilityId.PrefabCatalog, "catalog_generation_did_not_advance");
                             return;
                         }
                         _censusReducer = new CensusReducer(
-                            catalog.PublishedRecords,
+                            catalog.PendingRecords,
                             WorldGeneration,
-                            catalog.CatalogGeneration,
+                            catalog.PendingCatalogGeneration,
                             System.DateTimeOffset.UtcNow,
                             _requestedOptions);
                         session.TransitionTo(ScanStage.CapturingObjectCensus);
-                        census.BeginObjectCapture(catalog.RuntimeEntityKeys, _censusReducer, _requestedOptions);
+                        census.BeginObjectCapture(catalog.PendingRuntimeEntityKeys, _censusReducer, _requestedOptions);
                         return;
 
                     case ScanStage.CapturingObjectCensus:
@@ -283,26 +293,35 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
 
         private void PublishCensus(ScanSession session, CensusAccess census)
         {
-            if (WorldGeneration != session.WorldGeneration || _publishedState.WorldGeneration != session.WorldGeneration)
+            var catalog = _catalog;
+            if (catalog == null
+                || !catalog.HasPendingPublication
+                || WorldGeneration != session.WorldGeneration
+                || _publishedState.WorldGeneration != session.WorldGeneration)
             {
                 FailCensusScan("APA-CEN-003", CapabilityId.ObjectCensus, "world_generation_changed_before_publish");
                 return;
             }
 
             var snapshot = census.BuildSnapshot();
+            if (snapshot.CatalogGeneration != catalog.PendingCatalogGeneration)
+            {
+                FailCensusScan("APA-CEN-003", CapabilityId.ObjectCensus, "catalog_generation_changed_before_publish");
+                return;
+            }
+
             session.TransitionTo(ScanStage.Finalizing);
             session.ReportProgress(1, 1);
-            session.Complete();
-            if (!_publishedState.TryPublishCensus(snapshot, scanSucceeded: true))
+            catalog.CommitPendingCapture();
+            if (!_publishedState.TryPublishCensus(snapshot, scanSucceeded: session.CanPublish))
             {
                 LastDiagnosticCode = "APA-CEN-003";
                 DegradeCapability(CapabilityId.ObjectCensus, "census_publish_world_mismatch");
-            }
-            else
-            {
-                LastDiagnosticCode = null;
+                return;
             }
 
+            session.Complete();
+            LastDiagnosticCode = null;
             census.FinishScan();
             _censusReducer = null;
             _networkCaptureStarted = false;
@@ -310,7 +329,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
 
         private void BeginCensusCancellation()
         {
-            if (_catalogCaptureActive)
+            if (_catalogCaptureActive || _catalog?.HasPendingPublication == true)
             {
                 _catalog?.CancelCapture();
                 _catalogCaptureActive = false;
@@ -326,7 +345,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
             LastDiagnosticCode = diagnosticCode;
             DegradeCapability(capability, capabilityDetail);
             _catalogScanRequested = false;
-            if (_catalogCaptureActive)
+            if (_catalogCaptureActive || _catalog?.HasPendingPublication == true)
             {
                 _catalog?.CancelCapture();
                 _catalogCaptureActive = false;

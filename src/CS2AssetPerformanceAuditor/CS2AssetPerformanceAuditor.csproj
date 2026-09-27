@@ -11,6 +11,7 @@
     <CSIIManagedPath Condition="'$(CSIIManagedPath)' == '' and '$(ManagedPath)' != ''">$(ManagedPath)</CSIIManagedPath>
     <CSIIManagedPath Condition="'$(CSIIManagedPath)' == '' and Exists('$(CSII_TOOLPATH)/Game.dll')">$(CSII_TOOLPATH)</CSIIManagedPath>
     <DefineConstants Condition="'$(CSIIManagedPath)' != '' and Exists('$(CSIIManagedPath)/Game.dll')">$(DefineConstants);CS2_GAME_API_AVAILABLE</DefineConstants>
+    <AssetAuditorUiDir>$(MSBuildProjectDirectory)\..\..\UI</AssetAuditorUiDir>
   </PropertyGroup>
   <ItemGroup Condition="'$(OS)' != 'Windows_NT'">
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="All" />
@@ -33,4 +34,14 @@
     <Reference Include="Unity.Entities"><HintPath>$(CSIIManagedPath)/Unity.Entities.dll</HintPath><Private>false</Private></Reference>
   </ItemGroup>
   <Import Project="$(CSII_TOOLPATH)/Mod.targets" Condition="'$(CSII_TOOLPATH)' != '' and Exists('$(CSII_TOOLPATH)/Mod.targets')" />
+
+  <Target Name="BuildAssetAuditorUI" BeforeTargets="DeployWIP" Condition="'$(NeedBuild)' == 'true' and Exists('$(AssetAuditorUiDir)\package.json')">
+    <Exec Command="npm.cmd run build" WorkingDirectory="$(AssetAuditorUiDir)" Condition="'$(OS)' == 'Windows_NT'" />
+    <Exec Command="npm run build" WorkingDirectory="$(AssetAuditorUiDir)" Condition="'$(OS)' != 'Windows_NT'" />
+    <ItemGroup>
+      <AssetAuditorUiFiles Include="$(AssetAuditorUiDir)\dist\**\*.*" />
+    </ItemGroup>
+    <Error Condition="'@(AssetAuditorUiFiles)' == ''" Text="Asset Auditor UI build produced no deployable files." />
+    <Copy SourceFiles="@(AssetAuditorUiFiles)" DestinationFiles="@(AssetAuditorUiFiles->'$(OutDir)\%(RecursiveDir)%(Filename)%(Extension)')" />
+  </Target>
 </Project>

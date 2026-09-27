@@ -15,10 +15,16 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Prefabs
         private int _capturedEntityCount;
         private int _nextEntityIndex;
         private bool _hasWorkingCapture;
+        private bool _deferPublication;
+        private bool _hasPendingPublication;
         private DateTimeOffset _workingCapturedAt;
+        private DateTimeOffset _pendingCapturedAt;
         private List<PrefabRecord> _workingRecords = new List<PrefabRecord>();
         private Dictionary<PrefabKey, PrefabRecord> _workingByKey = new Dictionary<PrefabKey, PrefabRecord>();
         private Dictionary<Entity, PrefabKey> _workingEntityKeys = new Dictionary<Entity, PrefabKey>();
+        private IReadOnlyList<PrefabRecord> _pendingRecords = Array.AsReadOnly(Array.Empty<PrefabRecord>());
+        private IReadOnlyDictionary<Entity, PrefabKey> _pendingEntityKeys =
+            new ReadOnlyDictionary<Entity, PrefabKey>(new Dictionary<Entity, PrefabKey>());
         private IReadOnlyList<PrefabRecord> _publishedRecords = Array.AsReadOnly(Array.Empty<PrefabRecord>());
         private IReadOnlyDictionary<Entity, PrefabKey> _publishedEntityKeys =
             new ReadOnlyDictionary<Entity, PrefabKey>(new Dictionary<Entity, PrefabKey>());
@@ -32,6 +38,8 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Prefabs
 
         public bool HasPendingItems => _hasWorkingCapture && _nextEntityIndex < _capturedEntities.Length;
 
+        public bool HasPendingPublication => _hasPendingPublication;
+
         public int CapturedEntityCount => _capturedEntityCount;
 
         public int ProcessedEntityCount { get; private set; }
@@ -40,16 +48,26 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Prefabs
 
         public long CatalogGeneration { get; private set; }
 
+        public long PendingCatalogGeneration => _hasPendingPublication
+            ? checked(CatalogGeneration + 1)
+            : CatalogGeneration;
+
         public DateTimeOffset CatalogCapturedAt { get; private set; }
+
+        public DateTimeOffset PendingCapturedAt => _hasPendingPublication ? _pendingCapturedAt : DateTimeOffset.MinValue;
 
         public IReadOnlyList<PrefabRecord> PublishedRecords => _publishedRecords;
 
         public IReadOnlyDictionary<Entity, PrefabKey> RuntimeEntityKeys => _publishedEntityKeys;
 
-        public void BeginCapture()
+        public IReadOnlyList<PrefabRecord> PendingRecords => _pendingRecords;
+
+        public IReadOnlyDictionary<Entity, PrefabKey> PendingRuntimeEntityKeys => _pendingEntityKeys;
+
+        public void BeginCapture(bool deferPublication = false)
         {
-            if (_hasWorkingCapture)
-                throw new InvalidOperationException("A Prefab catalog capture is already active.");
+            if (_hasWorkingCapture || _hasPendingPublication)
+                throw new InvalidOperationException("A Prefab catalog capture or pending publication is already active.");
             if (!_world.IsCreated)
                 throw new InvalidOperationException("The current game world is no longer available.");
 
@@ -73,6 +91,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Prefabs
 
             _nextEntityIndex = 0;
             _workingCapturedAt = DateTimeOffset.UtcNow;
+            _deferPublication = deferPublication;
             ProcessedEntityCount = 0;
             UnresolvedEntityCount = 0;
             _workingRecords = new List<PrefabRecord>(_capturedEntities.Length);
@@ -144,19 +163,40 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Prefabs
             }
 
             if (_nextEntityIndex >= _capturedEntities.Length)
-                PublishWorkingCapture();
+            {
+                if (_deferPublication)
+                    StageWorkingCapture();
+                else
+                    PublishWorkingCapture();
+            }
 
             return processedThisSlice;
         }
 
+        public void CommitPendingCapture()
+        {
+            if (!_hasPendingPublication)
+                throw new InvalidOperationException("No pending Prefab catalog capture is available to publish.");
+
+            _publishedRecords = _pendingRecords;
+            _publishedEntityKeys = _pendingEntityKeys;
+            CatalogGeneration = checked(CatalogGeneration + 1);
+            CatalogCapturedAt = _pendingCapturedAt;
+            DiscardPendingCapture();
+        }
+
+        public void DiscardPendingCapture()
+        {
+            _hasPendingPublication = false;
+            _pendingCapturedAt = DateTimeOffset.MinValue;
+            _pendingRecords = Array.AsReadOnly(Array.Empty<PrefabRecord>());
+            _pendingEntityKeys = new ReadOnlyDictionary<Entity, PrefabKey>(new Dictionary<Entity, PrefabKey>());
+        }
+
         public void CancelCapture()
         {
-            _capturedEntities = Array.Empty<Entity>();
-            _nextEntityIndex = 0;
-            _hasWorkingCapture = false;
-            _workingRecords.Clear();
-            _workingByKey.Clear();
-            _workingEntityKeys.Clear();
+            ClearWorkingCapture();
+            DiscardPendingCapture();
         }
 
         public void ResetForWorld()
@@ -171,15 +211,33 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Prefabs
             UnresolvedEntityCount = 0;
         }
 
+        private void StageWorkingCapture()
+        {
+            _pendingRecords = Array.AsReadOnly(_workingRecords.ToArray());
+            _pendingEntityKeys = new ReadOnlyDictionary<Entity, PrefabKey>(
+                new Dictionary<Entity, PrefabKey>(_workingEntityKeys));
+            _pendingCapturedAt = _workingCapturedAt;
+            _hasPendingPublication = true;
+            ClearWorkingCapture();
+        }
+
         private void PublishWorkingCapture()
         {
             _publishedRecords = Array.AsReadOnly(_workingRecords.ToArray());
             _publishedEntityKeys = new ReadOnlyDictionary<Entity, PrefabKey>(
                 new Dictionary<Entity, PrefabKey>(_workingEntityKeys));
-            CatalogGeneration++;
+            CatalogGeneration = checked(CatalogGeneration + 1);
             CatalogCapturedAt = _workingCapturedAt;
-            _hasWorkingCapture = false;
+            ClearWorkingCapture();
+        }
+
+        private void ClearWorkingCapture()
+        {
             _capturedEntities = Array.Empty<Entity>();
+            _nextEntityIndex = 0;
+            _hasWorkingCapture = false;
+            _deferPublication = false;
+            _workingCapturedAt = DateTimeOffset.MinValue;
             _workingRecords = new List<PrefabRecord>();
             _workingByKey = new Dictionary<PrefabKey, PrefabRecord>();
             _workingEntityKeys = new Dictionary<Entity, PrefabKey>();

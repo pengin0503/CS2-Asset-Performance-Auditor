@@ -214,7 +214,7 @@ If `dotnet build` succeeds but nothing is deployed under the CS2 `Mods` director
 1. Close Cities: Skylines II if it was running while you built/deployed the mod.
 2. Start Cities: Skylines II normally.
 3. Make sure the local Code Mod is enabled in the game's mod/playset configuration if the game presents it as disabled.
-4. Open the game's Options/Mods UI and confirm that **CS2 Asset Performance Auditor** registers its settings.
+4. Confirm that **CS2 Asset Performance Auditor** is listed as an enabled mod. Its settings are edited in the auditor panel's **Settings** tab (not the game's Options menu) and persist between sessions.
 5. Load a city.
 6. Open **Asset Auditor** from its in-game UI entry.
 

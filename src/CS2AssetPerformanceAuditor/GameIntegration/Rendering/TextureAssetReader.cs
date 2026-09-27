@@ -19,8 +19,12 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Rendering
 
         private static TextureObservation ReadCore(TextureAsset texture, string id, DateTimeOffset capturedAt)
         {
+            // TextureAsset fills width/height/format/mips only when a load reads the file header; the audit does
+            // not load textures, so an unread header is reported as not scanned rather than as a failure.
             var width = texture.width;
             var height = texture.height;
+            if (width <= 0 || height <= 0)
+                return TextureObservation.NotResident(id, capturedAt);
             // TextureAsset stores Tex2D (depth 1) and Tex2DArray (depth = slice count) data only.
             var depth = Math.Max(1, texture.depth);
             var mips = Math.Max(1, texture.mipsCount);

@@ -102,6 +102,41 @@ namespace CS2AssetPerformanceAuditor.AdapterTests
         }
 
         [Test]
+        public void Geometry_totals_are_resident_on_the_render_prefab_and_asset_detail_exposes_its_load_state()
+        {
+            var renderPrefab = GameType("Game.Prefabs.RenderPrefab");
+            foreach (var name in new[] { "meshCount", "vertexCount", "indexCount" })
+                Assert.That(renderPrefab.GetProperty(name, PublicInstance)?.PropertyType.FullName, Is.EqualTo("System.Int32"), $"RenderPrefab.{name}");
+
+            var geometry = GameType("Colossal.IO.AssetDatabase.GeometryAsset");
+            var dataType = geometry.GetProperty("data", PublicInstance)?.PropertyType;
+            var loadingType = geometry.GetProperty("loading", PublicInstance)?.PropertyType;
+            Assert.That(dataType?.IsByRef, Is.True, "GeometryAsset.data must be a ref property");
+            Assert.That(loadingType?.IsByRef, Is.True, "GeometryAsset.loading must be a ref property");
+            Assert.That(dataType!.GetElementType()!.GetProperty("IsValid", PublicInstance)?.PropertyType.FullName, Is.EqualTo("System.Boolean"));
+            foreach (var field in new[] { "meshInfos", "meshOffsets", "subMeshInfos" })
+                Assert.That(dataType.GetElementType()!.GetField(field, PublicInstance), Is.Not.Null, $"GeometryAsset.Data.{field}");
+            foreach (var field in new[] { "m_AsyncLoadingScheduled", "m_AsyncLoadingStarted" })
+                Assert.That(loadingType!.GetElementType()!.GetField(field, PublicInstance)?.FieldType.FullName, Is.EqualTo("System.Boolean"), $"GeometryAsset.Loading.{field}");
+            Assert.That(geometry.GetMethod("GetSubMeshCount", PublicInstance), Is.Not.Null);
+        }
+
+        [Test]
+        public void Mod_settings_persistence_uses_file_location_load_and_save_apis()
+        {
+            var fileLocation = GameType("Colossal.IO.AssetDatabase.FileLocationAttribute");
+            Assert.That(fileLocation.GetConstructors().Any(ctor => ctor.GetParameters().Select(p => p.ParameterType.FullName).SequenceEqual(new[] { "System.String" })), Is.True);
+
+            var database = GameType("Colossal.IO.AssetDatabase.AssetDatabase");
+            Assert.That(database.GetProperty("global", BindingFlags.Public | BindingFlags.Static), Is.Not.Null);
+            Assert.That(database.GetMethods(PublicInstance).Any(method => method.Name == "LoadSettings"
+                && method.GetParameters().Select(p => p.ParameterType.FullName).SequenceEqual(new[] { "System.String", "System.Object", "System.Object", "System.Boolean" })), Is.True);
+
+            var modSetting = GameType("Game.Modding.ModSetting");
+            Assert.That(modSetting.GetMethod("ApplyAndSave", PublicInstance, null, Type.EmptyTypes, null), Is.Not.Null);
+        }
+
+        [Test]
         public void Texture_footprint_formats_are_graphics_format_names_reported_by_texture_assets()
         {
             var texture = GameType("Colossal.IO.AssetDatabase.TextureAsset");

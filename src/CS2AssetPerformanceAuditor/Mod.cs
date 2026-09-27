@@ -1,3 +1,4 @@
+using Colossal.IO.AssetDatabase;
 using Game;
 using Game.Modding;
 using CS2AssetPerformanceAuditor.GameIntegration;
@@ -7,12 +8,14 @@ namespace CS2AssetPerformanceAuditor
 {
     public sealed class Mod : IMod
     {
-        private Setting? _setting;
+        // Loaded before the systems are created so the UI system can seed its settings from it.
+        internal static AuditorSetting? Settings { get; private set; }
 
         public void OnLoad(UpdateSystem updateSystem)
         {
-            _setting = new Setting(this);
-            _setting.RegisterInOptionsUI();
+            var settings = new AuditorSetting(this);
+            AssetDatabase.global.LoadSettings(nameof(CS2AssetPerformanceAuditor), settings, new AuditorSetting(this));
+            Settings = settings;
 
             updateSystem.UpdateAt<AssetAuditSystem>(SystemUpdatePhase.MainLoop);
             updateSystem.UpdateAt<AssetAuditUISystem>(SystemUpdatePhase.UIUpdate);
@@ -20,8 +23,7 @@ namespace CS2AssetPerformanceAuditor
 
         public void OnDispose()
         {
-            _setting?.UnregisterInOptionsUI();
-            _setting = null;
+            Settings = null;
         }
     }
 }

@@ -35,12 +35,12 @@ namespace CS2AssetPerformanceAuditor.Export
                 catalog.TryGetValue(key, out var prefab);
                 census.TryGetValue(key, out var entry);
                 var findingCount = report.Analysis.Findings.Count(finding => BelongsTo(finding, type, id));
-                builder.Append(Escape(id)).Append(',')
-                    .Append(Escape(type)).Append(',')
-                    .Append(Escape(prefab?.DisplayName ?? string.Empty)).Append(',')
-                    .Append(Escape(prefab?.Traits ?? string.Empty)).Append(',')
-                    .Append(Escape(entry?.Presence ?? string.Empty)).Append(',')
-                    .Append(Escape(entry?.Counters?.TopLevelObjects?.Value?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)).Append(',')
+                builder.Append(EscapeText(id)).Append(',')
+                    .Append(EscapeText(type)).Append(',')
+                    .Append(EscapeText(prefab?.DisplayName ?? string.Empty)).Append(',')
+                    .Append(EscapeText(prefab?.Traits ?? string.Empty)).Append(',')
+                    .Append(EscapeText(entry?.Presence ?? string.Empty)).Append(',')
+                    .Append(entry?.Counters?.TopLevelObjects?.Value?.ToString(CultureInfo.InvariantCulture) ?? string.Empty).Append(',')
                     .Append(findingCount.ToString(CultureInfo.InvariantCulture)).AppendLine();
             }
             return builder.ToString();
@@ -56,9 +56,13 @@ namespace CS2AssetPerformanceAuditor.Export
 
         private static string RowKey(string prefabType, string prefabId) => prefabType + "\n" + prefabId;
 
-        private static string Escape(string value)
+        // Text cells come from Prefab and asset names, which mods control. A leading =, +, -, @, tab, or carriage
+        // return would be evaluated as a formula by spreadsheet applications, so such cells are prefixed with '.
+        private static string EscapeText(string value)
         {
             value ??= string.Empty;
+            if (value.Length > 0 && "=+-@\t\r".IndexOf(value[0]) >= 0)
+                value = "'" + value;
             return value.IndexOfAny(new[] { ',', '"', '\r', '\n' }) >= 0 ? "\"" + value.Replace("\"", "\"\"") + "\"" : value;
         }
     }

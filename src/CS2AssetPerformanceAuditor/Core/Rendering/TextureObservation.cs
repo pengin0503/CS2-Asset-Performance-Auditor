@@ -36,6 +36,23 @@ namespace CS2AssetPerformanceAuditor.Core.Rendering
         public static TextureObservation Available(string id, int width, int height, int depth, string format, string dimension, int mips, string filter, string wrap, int aniso, long estimatedPayload, DateTimeOffset capturedAt)
             => FromMetadata(id, width, height, depth, format, dimension, mips, filter, wrap, aniso, Observation<long>.FromValue(estimatedPayload, ObservationOrigin.Estimated, capturedAt), capturedAt);
 
+        // The texture's header has never been read (it was not loaded, for example because it is served through
+        // virtual texturing). Its metadata is unknown, which is neither a read failure nor a zero-sized texture.
+        public static TextureObservation NotResident(string id, DateTimeOffset capturedAt)
+        {
+            return new TextureObservation(id,
+                Observation<int>.Unavailable(Availability.NotScanned, ObservationOrigin.AssetDatabase, capturedAt),
+                Observation<int>.Unavailable(Availability.NotScanned, ObservationOrigin.AssetDatabase, capturedAt),
+                Observation<int>.Unavailable(Availability.NotScanned, ObservationOrigin.AssetDatabase, capturedAt),
+                Observation<string>.Unavailable(Availability.NotScanned, ObservationOrigin.AssetDatabase, capturedAt),
+                Observation<string>.Unavailable(Availability.NotScanned, ObservationOrigin.AssetDatabase, capturedAt),
+                Observation<int>.Unavailable(Availability.NotScanned, ObservationOrigin.AssetDatabase, capturedAt),
+                Observation<string>.Unavailable(Availability.NotScanned, ObservationOrigin.AssetDatabase, capturedAt),
+                Observation<string>.Unavailable(Availability.NotScanned, ObservationOrigin.AssetDatabase, capturedAt),
+                Observation<int>.Unavailable(Availability.NotScanned, ObservationOrigin.AssetDatabase, capturedAt),
+                Observation<long>.Unavailable(Availability.NotScanned, ObservationOrigin.Estimated, capturedAt));
+        }
+
         public static IReadOnlyList<TextureObservation> Deduplicate(IEnumerable<TextureObservation> observations)
         {
             if (observations == null) throw new ArgumentNullException(nameof(observations));

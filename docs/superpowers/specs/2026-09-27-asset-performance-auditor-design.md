@@ -563,6 +563,8 @@ Prefab creation/update can mark `CatalogDirty`; it does not automatically trigge
 
 Normal Asset Audit uses `GeometryAsset` metadata before loading Unity `Mesh` objects.
 
+Mesh, vertex, and index totals come from the `RenderPrefab`'s serialized metadata, which is resident with the Prefab. `GeometryAsset` mesh data is streamed on demand, so per-mesh and submesh detail is read only when that data is already resident and not being loaded; the audit never triggers geometry or texture loads. Detail that is not resident is reported as Not scanned, never as zero. Likewise, `TextureAsset` dimensions and format are only known after a load has read the texture header; unread textures are Not scanned rather than failed.
+
 `GeometryObservation` includes, where available:
 
 - mesh count

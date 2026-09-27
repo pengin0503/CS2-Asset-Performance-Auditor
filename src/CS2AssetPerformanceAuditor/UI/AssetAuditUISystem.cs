@@ -38,6 +38,9 @@ namespace CS2AssetPerformanceAuditor.UI
         protected override void OnCreate()
         {
             base.OnCreate();
+            var stored = Mod.Settings;
+            if (stored != null)
+                _uiSettings = NormalizeSettings(FromStoredSettings(stored));
             _snapshotBinding = new ValueBinding<string>(UiBindingContract.Group, UiBindingContract.Snapshot, "{}");
             _exportBinding = new ValueBinding<string>(UiBindingContract.Group, UiBindingContract.ExportedReport, string.Empty);
             AddBinding(_snapshotBinding);
@@ -91,7 +94,7 @@ namespace CS2AssetPerformanceAuditor.UI
             try
             {
                 if (UiSnapshotBuilder.TryDeserialize<UiScanOptions>(optionsJson, out var options))
-                    _uiSettings = NormalizeSettings(options);
+                    ApplySettings(options);
                 var scanOptions = new ScanOptions(_uiSettings.CollectSubordinateObjects, _uiSettings.CollectNetworkEdges);
                 InvalidateExport();
                 GetAuditSystem()?.RequestCensusScan(scanOptions);
@@ -109,7 +112,7 @@ namespace CS2AssetPerformanceAuditor.UI
             try
             {
                 if (UiSnapshotBuilder.TryDeserialize<UiScanOptions>(optionsJson, out var options))
-                    _uiSettings = NormalizeSettings(options);
+                    ApplySettings(options);
                 InvalidateExport();
                 GetAuditSystem()?.RequestAssetAudit(
                     _uiSettings.FrameBudgetMs,
@@ -172,7 +175,7 @@ namespace CS2AssetPerformanceAuditor.UI
             {
                 if (!UiSnapshotBuilder.TryDeserialize<UiScanOptions>(settingsJson, out var options))
                     throw new ArgumentException("The settings payload was invalid.");
-                _uiSettings = NormalizeSettings(options);
+                ApplySettings(options);
                 PublishSnapshot();
             }
             catch
@@ -344,6 +347,50 @@ namespace CS2AssetPerformanceAuditor.UI
             var presenceFilter = ParseOptionalEnum<CensusPresence>(request.PresenceFilter);
             var sort = ParseEnum(request.Sort, AssetSort.DisplayNameAscending);
             return new AssetQuery(request.SearchText, traitFilter, sourceFilter, presenceFilter, sort, request.Offset, Math.Min(AssetQueryService.MaximumPageSize, Math.Max(1, request.Limit)));
+        }
+
+        private void ApplySettings(UiScanOptions options)
+        {
+            _uiSettings = NormalizeSettings(options);
+            var stored = Mod.Settings;
+            if (stored == null || SameSettings(FromStoredSettings(stored), _uiSettings))
+                return;
+            stored.CollectSubordinateObjects = _uiSettings.CollectSubordinateObjects;
+            stored.CollectNetworkEdges = _uiSettings.CollectNetworkEdges;
+            stored.FrameBudgetMs = _uiSettings.FrameBudgetMs;
+            stored.ProgressUpdateMs = _uiSettings.ProgressUpdateMs;
+            stored.RefreshCatalogAtScanStart = _uiSettings.RefreshCatalogAtScanStart;
+            stored.EnableHeuristicFindings = _uiSettings.EnableHeuristicFindings;
+            stored.EnablePeerOutliers = _uiSettings.EnablePeerOutliers;
+            stored.ComparisonPopulation = _uiSettings.ComparisonPopulation;
+            stored.ShowNoticeFindings = _uiSettings.ShowNoticeFindings;
+            stored.PageSize = _uiSettings.PageSize;
+            stored.MetadataCacheLimit = _uiSettings.MetadataCacheLimit;
+            stored.DeepInspectionLimit = _uiSettings.DeepInspectionLimit;
+            stored.UiScale = _uiSettings.UiScale;
+            stored.ApplyAndSave();
+        }
+
+        private static UiScanOptions FromStoredSettings(AuditorSetting stored) => new UiScanOptions
+        {
+            CollectSubordinateObjects = stored.CollectSubordinateObjects,
+            CollectNetworkEdges = stored.CollectNetworkEdges,
+            FrameBudgetMs = stored.FrameBudgetMs,
+            ProgressUpdateMs = stored.ProgressUpdateMs,
+            RefreshCatalogAtScanStart = stored.RefreshCatalogAtScanStart,
+            EnableHeuristicFindings = stored.EnableHeuristicFindings,
+            EnablePeerOutliers = stored.EnablePeerOutliers,
+            ComparisonPopulation = stored.ComparisonPopulation,
+            ShowNoticeFindings = stored.ShowNoticeFindings,
+            PageSize = stored.PageSize,
+            MetadataCacheLimit = stored.MetadataCacheLimit,
+            DeepInspectionLimit = stored.DeepInspectionLimit,
+            UiScale = stored.UiScale
+        };
+
+        private static bool SameSettings(UiScanOptions left, UiScanOptions right)
+        {
+            return StringComparer.Ordinal.Equals(UiSnapshotBuilder.Serialize(left), UiSnapshotBuilder.Serialize(right));
         }
 
         private static UiScanOptions NormalizeSettings(UiScanOptions options)

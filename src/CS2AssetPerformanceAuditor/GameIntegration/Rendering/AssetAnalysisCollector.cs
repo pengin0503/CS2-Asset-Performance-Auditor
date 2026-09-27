@@ -166,7 +166,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Rendering
                         continue;
                     }
 
-                    _geometry[record.Key] = _geometryReader.Read(renderPrefab.geometryAsset, _analysisGeneration, _capturedAt);
+                    _geometry[record.Key] = _geometryReader.Read(renderPrefab, _analysisGeneration, _capturedAt);
                 }
                 catch
                 {

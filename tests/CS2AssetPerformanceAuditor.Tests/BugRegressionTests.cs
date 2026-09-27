@@ -161,6 +161,28 @@ namespace CS2AssetPerformanceAuditor.Tests
             Assert.That(PrefabCatalogContent.HasSameRecords(new[] { house, tree }, new[] { house }), Is.False);
         }
 
+        [Test]
+        public void Texture_whose_header_was_never_read_is_not_scanned_rather_than_zero_or_failed()
+        {
+            var texture = TextureObservation.NotResident("Texture.VT", CapturedAt);
+            Assert.That(texture.EstimatedLogicalPayload.Availability, Is.EqualTo(Availability.NotScanned));
+            Assert.That(texture.EstimatedLogicalPayload.HasValue, Is.False);
+            Assert.That(texture.Width.Availability, Is.EqualTo(Availability.NotScanned));
+            Assert.That(texture.Format.HasValue, Is.False);
+        }
+
+        [TestCase("=HYPERLINK(\"http://x\")", "'=HYPERLINK(\"\"http://x\"\")")]
+        [TestCase("+cmd", "'+cmd")]
+        [TestCase("-2+3", "'-2+3")]
+        [TestCase("@SUM(A1)", "'@SUM(A1)")]
+        public void Csv_text_cells_cannot_start_a_spreadsheet_formula(string displayName, string expectedCell)
+        {
+            var prefab = new PrefabRecord(new PrefabKey("Mod.Asset", "Prop"), displayName, PrefabTraits.Prop, new AssetOriginEvidence(isSubscribedMod: true));
+            var report = Builder().Build(new[] { prefab }, 1, CapturedAt, null, Capabilities, "0.1.0", CapturedAt);
+            var row = new CsvSummaryExporter().Export(report).Trim().Split(Environment.NewLine)[1];
+            Assert.That(row, Does.Contain(expectedCell.Contains(",") ? "\"" + expectedCell + "\"" : expectedCell));
+        }
+
         private static AuditReportBuilder Builder() => new AuditReportBuilder(new PrivacySanitizer("alice", "HOST-7"));
 
         private static (PrefabRecord Prefab, PrefabRecord Other, AssetAnalysisSnapshot Analysis) AnalysisWithOwnedFinding()

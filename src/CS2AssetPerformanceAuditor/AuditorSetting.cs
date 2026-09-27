@@ -1,10 +1,16 @@
+using Colossal.IO.AssetDatabase;
 using Game.Modding;
 
 namespace CS2AssetPerformanceAuditor
 {
-    public sealed class Setting : ModSetting
+    // Persisted backing store for the in-panel Settings tab. The type name is what
+    // AssetDatabase.SaveSpecificSetting matches when saving, so it is deliberately distinct from the common "Setting".
+    // It is not registered in the game's Options UI: the Options generator only renders bool/int/float/string
+    // properties with specific attributes, and the panel is the single place these values are edited.
+    [FileLocation(nameof(CS2AssetPerformanceAuditor))]
+    public sealed class AuditorSetting : ModSetting
     {
-        public Setting(IMod mod) : base(mod)
+        public AuditorSetting(IMod mod) : base(mod)
         {
             SetDefaults();
         }

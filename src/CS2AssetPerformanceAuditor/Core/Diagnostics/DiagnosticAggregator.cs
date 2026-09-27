@@ -16,13 +16,9 @@ namespace CS2AssetPerformanceAuditor.Core.Diagnostics
         }
 
         public DiagnosticCode Code { get; }
-
         public string Message { get; }
-
         public int Count { get; }
-
         public DateTimeOffset FirstSeenAt { get; }
-
         public DateTimeOffset LastSeenAt { get; }
     }
 
@@ -40,18 +36,37 @@ namespace CS2AssetPerformanceAuditor.Core.Diagnostics
             }
 
             public DiagnosticCode Code { get; }
-
             public string Message { get; }
-
             public int Count { get; set; }
-
             public DateTimeOffset FirstSeenAt { get; }
-
             public DateTimeOffset LastSeenAt { get; set; }
         }
 
         private readonly object _gate = new object();
         private readonly Dictionary<string, MutableAggregate> _items = new Dictionary<string, MutableAggregate>(StringComparer.Ordinal);
+
+        public int DistinctCount
+        {
+            get
+            {
+                lock (_gate)
+                    return _items.Count;
+            }
+        }
+
+        public long OccurrenceCount
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    long total = 0;
+                    foreach (var item in _items.Values)
+                        total = checked(total + item.Count);
+                    return total;
+                }
+            }
+        }
 
         public void Add(string code, string message, DateTimeOffset? seenAt = null)
         {

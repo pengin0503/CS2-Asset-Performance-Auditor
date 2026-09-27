@@ -46,13 +46,16 @@ namespace CS2AssetPerformanceAuditor.Tests
             var diagnostics = new DiagnosticAggregator();
             diagnostics.Add("APA-GEO-001", "metadata_read_failed", StartedAt);
             diagnostics.Add("APA-GEO-001", "metadata_read_failed", StartedAt.AddSeconds(1));
+            diagnostics.Add("APA-TEX-001", "texture_read_failed", StartedAt.AddSeconds(2));
 
             var snapshot = diagnostics.Snapshot();
 
-            Assert.That(snapshot, Has.Count.EqualTo(1));
+            Assert.That(snapshot, Has.Count.EqualTo(2));
             Assert.That(snapshot[0].Count, Is.EqualTo(2));
             Assert.That(snapshot[0].FirstSeenAt, Is.EqualTo(StartedAt));
             Assert.That(snapshot[0].LastSeenAt, Is.EqualTo(StartedAt.AddSeconds(1)));
+            Assert.That(diagnostics.DistinctCount, Is.EqualTo(2));
+            Assert.That(diagnostics.OccurrenceCount, Is.EqualTo(3));
         }
     }
 }

@@ -34,6 +34,9 @@ export const nativeBindings: AssetAuditorBindings = {
   requestAssetAudit(options: UiScanOptions): void {
     trigger(UI_BINDING_GROUP, "requestAssetAudit", JSON.stringify(normalizeUiSettings(options)));
   },
+  requestDeepInspection(renderKey: string): void {
+    trigger(UI_BINDING_GROUP, "requestDeepInspection", renderKey);
+  },
   cancelCensus(): void {
     trigger(UI_BINDING_GROUP, "cancelCensus");
   },
@@ -101,34 +104,22 @@ function clampFinite(value: number | undefined, minimum: number, maximum: number
 export function formatObservation(observation: UiObservation<number>): string {
   switch (observation.availability) {
     case "Available":
-      return observation.value === null || observation.value === undefined
-        ? "Unknown"
-        : String(observation.value);
-    case "NotScanned":
-      return "Not scanned";
-    case "NotApplicable":
-      return "N/A";
-    case "Unsupported":
-      return "Unsupported";
-    case "Failed":
-      return "Failed";
-    default:
-      return "Unknown";
+      return observation.value === null || observation.value === undefined ? "Unknown" : String(observation.value);
+    case "NotScanned": return "Not scanned";
+    case "NotApplicable": return "N/A";
+    case "Unsupported": return "Unsupported";
+    case "Failed": return "Failed";
+    default: return "Unknown";
   }
 }
 
 export function formatCountKind(countKind: CountKind): string {
   switch (countKind) {
-    case "TopLevelObjects":
-      return "Top-level objects";
-    case "SubordinateObjects":
-      return "Subordinate objects";
-    case "LiveObjectReferences":
-      return "Live object references";
-    case "NetworkEdges":
-      return "Network edges";
-    default:
-      return "Not applicable";
+    case "TopLevelObjects": return "Top-level objects";
+    case "SubordinateObjects": return "Subordinate objects";
+    case "LiveObjectReferences": return "Live object references";
+    case "NetworkEdges": return "Network edges";
+    default: return "Not applicable";
   }
 }
 

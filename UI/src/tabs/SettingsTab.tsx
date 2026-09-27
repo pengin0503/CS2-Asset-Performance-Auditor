@@ -1,14 +1,14 @@
 import React from "react";
-import type { UiScanOptions } from "../types";
+import type { NormalizedUiScanOptions } from "../types";
 
 export function SettingsTab({
   settings,
   onChange,
 }: {
-  settings: UiScanOptions;
-  onChange: (settings: UiScanOptions) => void;
+  settings: NormalizedUiScanOptions;
+  onChange: (settings: NormalizedUiScanOptions) => void;
 }): React.JSX.Element {
-  const set = <K extends keyof UiScanOptions>(key: K, value: UiScanOptions[K]) => onChange({ ...settings, [key]: value });
+  const set = <K extends keyof NormalizedUiScanOptions>(key: K, value: NormalizedUiScanOptions[K]) => onChange({ ...settings, [key]: value });
   return (
     <section className="apa__tab-content" aria-labelledby="apa-settings-title">
       <div className="apa__section-heading"><div><p className="apa__eyebrow">Bounded and snapshot-aware</p><h2 id="apa-settings-title">Settings</h2></div></div>
@@ -24,7 +24,7 @@ export function SettingsTab({
       <label className="apa__setting-row"><span><strong>Heuristic findings</strong><small>Potential issues remain evidence-based and versioned.</small></span><input type="checkbox" checked={settings.enableHeuristicFindings} onChange={(event) => set("enableHeuristicFindings", event.currentTarget.checked)} /></label>
       <label className="apa__setting-row"><span><strong>Peer-outlier analysis</strong><small>Requires a sufficient comparable population.</small></span><input type="checkbox" checked={settings.enablePeerOutliers} onChange={(event) => set("enablePeerOutliers", event.currentTarget.checked)} /></label>
       <label className="apa__setting-row"><span><strong>Show Notice findings</strong><small>Display informational findings in Warnings.</small></span><input type="checkbox" checked={settings.showNoticeFindings} onChange={(event) => set("showNoticeFindings", event.currentTarget.checked)} /></label>
-      <label className="apa__field"><span>Comparison population</span><select value={settings.comparisonPopulation} onChange={(event) => set("comparisonPopulation", event.currentTarget.value as UiScanOptions["comparisonPopulation"])}><option value="SameCategory">Same category</option><option value="BuiltinDlc">Vanilla / DLC</option><option value="Custom">Custom assets</option><option value="SameSourcePack">Same source pack</option></select></label>
+      <label className="apa__field"><span>Comparison population</span><select value={settings.comparisonPopulation} onChange={(event) => set("comparisonPopulation", event.currentTarget.value as NormalizedUiScanOptions["comparisonPopulation"])}><option value="SameCategory">Same category</option><option value="BuiltinDlc">Vanilla / DLC</option><option value="Custom">Custom assets</option><option value="SameSourcePack">Same source pack</option></select></label>
 
       <h3>Advanced</h3>
       <label className="apa__field"><span>Asset page size</span><input type="number" min={25} max={200} value={settings.pageSize} onChange={(event) => set("pageSize", Number(event.currentTarget.value))} /></label>

@@ -15,7 +15,7 @@ using Unity.Entities;
 
 namespace CS2AssetPerformanceAuditor.UI
 {
-    public sealed class AssetAuditUISystem : UISystemBase
+    public sealed partial class AssetAuditUISystem : UISystemBase
     {
         private readonly UiSnapshotBuilder _snapshotBuilder = new UiSnapshotBuilder();
         private readonly DiagnosticAggregator _diagnostics = new DiagnosticAggregator();

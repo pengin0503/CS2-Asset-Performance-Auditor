@@ -18,7 +18,7 @@ using Unity.Entities;
 
 namespace CS2AssetPerformanceAuditor.GameIntegration
 {
-    public sealed class AssetAuditSystem : GameSystemBase
+    public sealed partial class AssetAuditSystem : GameSystemBase
     {
         private const int CatalogSliceSize = 64;
         private const int CensusReductionSliceSize = 512;

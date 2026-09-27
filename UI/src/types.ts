@@ -21,6 +21,8 @@ export type CensusPresence =
 export type FindingStatus = "Warning" | "PotentialIssue" | "Notice" | "Observed";
 export type FindingCategory = "Geometry" | "Lod" | "Material" | "Texture" | "Exposure" | "Integrity";
 export type RenderCoverage = Availability | "Unknown";
+export type ExportFormat = "Json" | "Csv";
+export type ExportScope = "Full" | "Filtered" | "Selected" | "Census" | "Findings";
 
 export interface UiObservation<T = number> {
   availability: Availability;
@@ -134,6 +136,17 @@ export interface AssetQueryRequest {
   limit: number;
 }
 
+export interface ExportAssetKey {
+  prefabId: string;
+  prefabType: string;
+}
+
+export interface ExportRequest {
+  format: ExportFormat;
+  scope: ExportScope;
+  selectedKeys: ExportAssetKey[];
+}
+
 export interface ScanStatusData {
   state: "Idle" | "Running" | "CancellationRequested" | "Cancelled" | "Failed" | "Completed";
   stage: string;
@@ -198,7 +211,7 @@ export interface AssetAuditorBindings {
   requestDeepInspection(renderKey: string): void;
   cancelCensus(): void;
   requestAssetsPage(query: AssetQueryRequest): void;
-  requestExport(): void;
+  requestExport(request?: ExportRequest): void;
   updateSettings(options: UiScanOptions): void;
 }
 
@@ -228,6 +241,12 @@ export const DEFAULT_SCAN_OPTIONS: NormalizedUiScanOptions = {
   metadataCacheLimit: 512,
   deepInspectionLimit: 1,
   uiScale: 1,
+};
+
+export const DEFAULT_EXPORT_REQUEST: ExportRequest = {
+  format: "Json",
+  scope: "Full",
+  selectedKeys: [],
 };
 
 export const EMPTY_OBSERVATION: UiObservation<number> = {

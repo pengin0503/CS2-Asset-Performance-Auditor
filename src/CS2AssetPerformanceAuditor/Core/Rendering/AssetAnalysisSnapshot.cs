@@ -90,16 +90,18 @@ namespace CS2AssetPerformanceAuditor.Core.Rendering
             foreach (var entry in prefabs ?? throw new ArgumentNullException(nameof(prefabs)))
             {
                 if (entry == null) throw new ArgumentException("Prefab analysis entries cannot contain null.", nameof(prefabs));
-                if (!prefabMap.TryAdd(entry.Key, entry))
+                if (prefabMap.ContainsKey(entry.Key))
                     throw new ArgumentException("Prefab analysis keys must be unique.", nameof(prefabs));
+                prefabMap.Add(entry.Key, entry);
             }
 
             var renderMap = new Dictionary<RenderAssetKey, RenderAssetAnalysisRecord>();
             foreach (var record in renderAssets ?? throw new ArgumentNullException(nameof(renderAssets)))
             {
                 if (record == null) throw new ArgumentException("Render analysis records cannot contain null.", nameof(renderAssets));
-                if (!renderMap.TryAdd(record.RenderAsset.Key, record))
+                if (renderMap.ContainsKey(record.RenderAsset.Key))
                     throw new ArgumentException("Render analysis keys must be unique.", nameof(renderAssets));
+                renderMap.Add(record.RenderAsset.Key, record);
             }
 
             _prefabs = new ReadOnlyDictionary<PrefabKey, PrefabAnalysisEntry>(prefabMap);

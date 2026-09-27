@@ -23,6 +23,18 @@ namespace CS2AssetPerformanceAuditor.Core.Rendering
         public override bool Equals(object? obj) => obj is RenderAssetKey other && Equals(other);
         public override int GetHashCode() { unchecked { return (StringComparer.Ordinal.GetHashCode(RenderAssetId) * 397) ^ StringComparer.Ordinal.GetHashCode(RenderAssetType); } }
         public override string ToString() => RenderAssetType + ":" + RenderAssetId;
+        public static bool TryParse(string? value, out RenderAssetKey key)
+        {
+            key = default;
+            if (string.IsNullOrWhiteSpace(value)) return false;
+            var separator = value.IndexOf(':');
+            if (separator <= 0 || separator >= value.Length - 1) return false;
+            var type = value.Substring(0, separator);
+            var id = value.Substring(separator + 1);
+            if (string.IsNullOrWhiteSpace(type) || string.IsNullOrWhiteSpace(id)) return false;
+            key = new RenderAssetKey(id, type);
+            return true;
+        }
         public static bool operator ==(RenderAssetKey left, RenderAssetKey right) => left.Equals(right);
         public static bool operator !=(RenderAssetKey left, RenderAssetKey right) => !left.Equals(right);
     }

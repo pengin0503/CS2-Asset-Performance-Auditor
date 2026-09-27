@@ -20,7 +20,7 @@ export type CensusPresence =
 
 export type FindingStatus = "Warning" | "PotentialIssue" | "Notice" | "Observed";
 export type FindingCategory = "Geometry" | "Lod" | "Material" | "Texture" | "Exposure" | "Integrity";
-export type RenderCoverage = "Supported" | "NotApplicable" | "Unknown" | "Failed" | "NotScanned";
+export type RenderCoverage = Availability | "Unknown";
 
 export interface UiObservation<T = number> {
   availability: Availability;

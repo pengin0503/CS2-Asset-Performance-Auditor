@@ -18,56 +18,35 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Capabilities
     {
         public static CapabilityReport Probe(World world)
         {
-            if (world == null)
-                throw new ArgumentNullException(nameof(world));
-
+            if (world == null) throw new ArgumentNullException(nameof(world));
             var capabilities = new List<CapabilityStatus>
             {
                 ProbeIndependently(CapabilityId.PrefabCatalog, () => ProbePrefabCatalog(world)),
                 ProbeIndependently(CapabilityId.ObjectCensus, () => ProbeObjectCensus(world)),
                 ProbeIndependently(CapabilityId.NetworkEdgeCensus, () => ProbeNetworkEdgeCensus(world)),
-                new CapabilityStatus(CapabilityId.GeometryMetadata, CapabilityState.Unsupported, "collector_not_implemented_phase_1"),
-                new CapabilityStatus(CapabilityId.SubmeshMetadata, CapabilityState.Unsupported, "collector_not_implemented_phase_1"),
-                new CapabilityStatus(CapabilityId.SurfaceMetadata, CapabilityState.Unsupported, "collector_not_implemented_phase_1"),
-                new CapabilityStatus(CapabilityId.TextureMetadata, CapabilityState.Unsupported, "collector_not_implemented_phase_1"),
+                new CapabilityStatus(CapabilityId.GeometryMetadata, CapabilityState.Supported, "geometry_metadata_reader_available"),
+                new CapabilityStatus(CapabilityId.SubmeshMetadata, CapabilityState.Supported, "topology_aware_submesh_reader_available"),
+                new CapabilityStatus(CapabilityId.SurfaceMetadata, CapabilityState.Unsupported, "collector_not_implemented_phase_2"),
+                new CapabilityStatus(CapabilityId.TextureMetadata, CapabilityState.Unsupported, "collector_not_implemented_phase_2"),
                 new CapabilityStatus(CapabilityId.ShaderDeepInspection, CapabilityState.Degraded, "deep_shader_inspection_not_implemented"),
                 new CapabilityStatus(CapabilityId.RuntimeGpuResidency, CapabilityState.Unsupported, "runtime_gpu_residency_is_out_of_scope")
             };
-
             var version = Application.version;
-            if (string.IsNullOrWhiteSpace(version))
-                version = ProjectInfo.TargetGameVersion;
-
+            if (string.IsNullOrWhiteSpace(version)) version = ProjectInfo.TargetGameVersion;
             return new CapabilityReport(version, CompatibilityState.Untested, capabilities);
         }
 
-        private static CapabilityStatus ProbePrefabCatalog(World world)
-        {
-            return world.GetExistingSystemManaged<PrefabSystem>() != null
+        private static CapabilityStatus ProbePrefabCatalog(World world) =>
+            world.GetExistingSystemManaged<PrefabSystem>() != null
                 ? new CapabilityStatus(CapabilityId.PrefabCatalog, CapabilityState.Supported, "prefab_system_available")
                 : new CapabilityStatus(CapabilityId.PrefabCatalog, CapabilityState.Degraded, "prefab_system_not_present_in_current_world");
-        }
 
         private static CapabilityStatus ProbeObjectCensus(World world)
         {
-            var excluded = new[]
-            {
-                ComponentType.ReadOnly<Temp>(),
-                ComponentType.ReadOnly<Deleted>(),
-                ComponentType.ReadOnly<Overridden>()
-            };
-            var common = new[]
-            {
-                ComponentType.ReadOnly<Game.Objects.Object>(),
-                ComponentType.ReadOnly<PrefabRef>()
-            };
-            ProbeQuery(world, common, null, new[]
-            {
-                excluded[0], excluded[1], excluded[2],
-                ComponentType.ReadOnly<Owner>(), ComponentType.ReadOnly<Controller>()
-            });
-            ProbeQuery(world, common,
-                new[] { ComponentType.ReadOnly<Owner>(), ComponentType.ReadOnly<Controller>() }, excluded);
+            var excluded = new[] { ComponentType.ReadOnly<Temp>(), ComponentType.ReadOnly<Deleted>(), ComponentType.ReadOnly<Overridden>() };
+            var common = new[] { ComponentType.ReadOnly<Game.Objects.Object>(), ComponentType.ReadOnly<PrefabRef>() };
+            ProbeQuery(world, common, null, new[] { excluded[0], excluded[1], excluded[2], ComponentType.ReadOnly<Owner>(), ComponentType.ReadOnly<Controller>() });
+            ProbeQuery(world, common, new[] { ComponentType.ReadOnly<Owner>(), ComponentType.ReadOnly<Controller>() }, excluded);
             return new CapabilityStatus(CapabilityId.ObjectCensus, CapabilityState.Supported, "object_profile_v1_queries_available");
         }
 
@@ -76,14 +55,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Capabilities
             ProbeQuery(world,
                 new[] { ComponentType.ReadOnly<Game.Net.Edge>(), ComponentType.ReadOnly<PrefabRef>() },
                 null,
-                new[]
-                {
-                    ComponentType.ReadOnly<Temp>(),
-                    ComponentType.ReadOnly<Deleted>(),
-                    ComponentType.ReadOnly<Overridden>(),
-                    ComponentType.ReadOnly<Owner>(),
-                    ComponentType.ReadOnly<Controller>()
-                });
+                new[] { ComponentType.ReadOnly<Temp>(), ComponentType.ReadOnly<Deleted>(), ComponentType.ReadOnly<Overridden>(), ComponentType.ReadOnly<Owner>(), ComponentType.ReadOnly<Controller>() });
             return new CapabilityStatus(CapabilityId.NetworkEdgeCensus, CapabilityState.Supported, "network_profile_v1_query_available");
         }
 
@@ -96,14 +68,8 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Capabilities
 
         private static CapabilityStatus ProbeIndependently(CapabilityId capability, Func<CapabilityStatus> probe)
         {
-            try
-            {
-                return probe();
-            }
-            catch (Exception exception)
-            {
-                return new CapabilityStatus(capability, CapabilityState.Degraded, "probe_failed_" + exception.GetType().Name);
-            }
+            try { return probe(); }
+            catch (Exception exception) { return new CapabilityStatus(capability, CapabilityState.Degraded, "probe_failed_" + exception.GetType().Name); }
         }
     }
 }

@@ -13,6 +13,7 @@ using CS2AssetPerformanceAuditor.GameIntegration.Census;
 using CS2AssetPerformanceAuditor.GameIntegration.Prefabs;
 using CS2AssetPerformanceAuditor.GameIntegration.Rendering;
 using Game;
+using Game.Prefabs;
 using Unity.Entities;
 
 namespace CS2AssetPerformanceAuditor.GameIntegration
@@ -26,6 +27,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
         private IPrefabCatalogAccess? _catalog;
         private CensusAccess? _censusAccess;
         private readonly PublishedAuditState _publishedState = new PublishedAuditState();
+        private readonly DeepInspectionReader _deepInspectionReader = new DeepInspectionReader();
         private CensusReducer? _censusReducer;
         private AssetAnalysisCollector? _analysisCollector;
         private RenderGraphSnapshot? _publishedRuntimeRenderGraph;
@@ -39,6 +41,9 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
         private bool _assetAuditWaitingForCatalog;
         private bool _assetAuditRefreshCatalog = true;
         private bool _assetAuditEnableHeuristics = true;
+        private bool _deepInspectionRequested;
+        private RenderAssetKey _requestedDeepInspectionKey;
+        private RenderAssetKey _activeDeepInspectionKey;
         private double _assetAuditFrameBudgetMs = 1.0;
         private long _catalogGenerationBeforeCapture;
         private long _catalogGenerationAtCensusStart;
@@ -66,13 +71,13 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
 
         public void RequestCatalogScan()
         {
-            if (!IsScanActive && !_catalogCaptureActive && !_assetAuditRequested)
+            if (!IsScanActive && !_catalogCaptureActive && !_assetAuditRequested && !_deepInspectionRequested)
                 _catalogScanRequested = true;
         }
 
         public void RequestCensusScan(ScanOptions? scanOptions = null)
         {
-            if (IsScanActive || _censusScanRequested || _censusCleanupRequested || _assetAuditRequested || _assetAuditWaitingForCatalog)
+            if (IsScanActive || _censusScanRequested || _censusCleanupRequested || _assetAuditRequested || _assetAuditWaitingForCatalog || _deepInspectionRequested)
                 return;
             _requestedOptions = scanOptions ?? ScanOptions.Default;
             _censusScanRequested = true;
@@ -80,12 +85,27 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
 
         public void RequestAssetAudit(double frameBudgetMilliseconds = 1.0, bool refreshCatalogAtScanStart = true, bool enableHeuristicFindings = true)
         {
-            if (IsScanActive || _assetAuditRequested || _assetAuditWaitingForCatalog || _censusScanRequested || _censusCleanupRequested || _catalogCaptureActive)
+            if (IsScanActive || _assetAuditRequested || _assetAuditWaitingForCatalog || _censusScanRequested || _censusCleanupRequested || _catalogCaptureActive || _deepInspectionRequested)
                 return;
             _assetAuditFrameBudgetMs = NormalizeFrameBudget(frameBudgetMilliseconds);
             _assetAuditRefreshCatalog = refreshCatalogAtScanStart;
             _assetAuditEnableHeuristics = enableHeuristicFindings;
             _assetAuditRequested = true;
+        }
+
+        public bool RequestDeepInspection(RenderAssetKey key)
+        {
+            if (!key.IsValid || IsScanActive || _catalogCaptureActive || _catalogScanRequested || _censusScanRequested || _censusCleanupRequested || _assetAuditRequested || _assetAuditWaitingForCatalog || _deepInspectionRequested)
+                return false;
+            var analysis = PublishedAnalysis;
+            var graph = _publishedRuntimeRenderGraph;
+            if (analysis == null || graph == null || analysis.WorldGeneration != WorldGeneration || analysis.CatalogGeneration != CatalogGeneration)
+                return false;
+            if (!analysis.TryGetRenderAsset(key, out _) || !graph.TryGetRuntimeAsset(key, out var runtime) || !(runtime is RenderPrefab))
+                return false;
+            _requestedDeepInspectionKey = key;
+            _deepInspectionRequested = true;
+            return true;
         }
 
         public void CancelCensusScan()
@@ -139,6 +159,12 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
                 return;
             }
 
+            if (_deepInspectionRequested && !IsScanActive && !_catalogCaptureActive)
+            {
+                StartDeepInspection();
+                return;
+            }
+
             if (_catalogScanRequested && !_catalogCaptureActive)
             {
                 StartCatalogCapture();
@@ -158,6 +184,8 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
                 AdvanceCensusScan();
             else if (CurrentScan.Kind == ScanKind.AssetAudit)
                 AdvanceAssetAudit();
+            else if (CurrentScan.Kind == ScanKind.DeepInspection)
+                AdvanceDeepInspection();
         }
 
         protected override void OnDestroy()
@@ -168,6 +196,9 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
             _censusAccess?.Dispose();
             _analysisCollector = null;
             _publishedRuntimeRenderGraph = null;
+            _deepInspectionRequested = false;
+            _requestedDeepInspectionKey = default;
+            _activeDeepInspectionKey = default;
             if (CurrentScan?.State == ScanState.CancellationRequested)
                 CurrentScan.MarkCancelled();
             _publishedState.ResetForWorld(WorldGeneration + 1);
@@ -202,6 +233,33 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
             }
 
             BeginAssetAnalysis();
+        }
+
+        private void StartDeepInspection()
+        {
+            _deepInspectionRequested = false;
+            var analysis = PublishedAnalysis;
+            var graph = _publishedRuntimeRenderGraph;
+            if (!_requestedDeepInspectionKey.IsValid || analysis == null || graph == null || analysis.WorldGeneration != WorldGeneration || analysis.CatalogGeneration != CatalogGeneration)
+            {
+                LastDiagnosticCode = "APA-DEEP-003";
+                _requestedDeepInspectionKey = default;
+                return;
+            }
+            if (!analysis.TryGetRenderAsset(_requestedDeepInspectionKey, out _) || !graph.TryGetRuntimeAsset(_requestedDeepInspectionKey, out var runtime) || !(runtime is RenderPrefab))
+            {
+                LastDiagnosticCode = "APA-DEEP-003";
+                _requestedDeepInspectionKey = default;
+                return;
+            }
+
+            LastDiagnosticCode = null;
+            var startedAt = DateTimeOffset.UtcNow;
+            _scanTelemetry = new ScanTelemetry(startedAt);
+            CurrentScan = ScanSession.Start(ScanKind.DeepInspection, WorldGeneration, startedAt);
+            _activeDeepInspectionKey = _requestedDeepInspectionKey;
+            _requestedDeepInspectionKey = default;
+            CurrentScan.TransitionTo(ScanStage.DeepInspecting);
         }
 
         private void StartCatalogCapture()
@@ -381,6 +439,49 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
             }
         }
 
+        private void AdvanceDeepInspection()
+        {
+            var session = CurrentScan;
+            if (session == null || session.Kind != ScanKind.DeepInspection || session.State != ScanState.Running || session.Stage != ScanStage.DeepInspecting)
+                return;
+            var analysis = PublishedAnalysis;
+            var graph = _publishedRuntimeRenderGraph;
+            if (analysis == null || graph == null || analysis.WorldGeneration != WorldGeneration || analysis.CatalogGeneration != CatalogGeneration || !_activeDeepInspectionKey.IsValid)
+            {
+                FailDeepInspection("APA-DEEP-003", "deep_inspection_context_changed");
+                return;
+            }
+            if (!graph.TryGetRuntimeAsset(_activeDeepInspectionKey, out var runtime) || !(runtime is RenderPrefab renderPrefab))
+            {
+                FailDeepInspection("APA-DEEP-003", "deep_inspection_runtime_render_asset_unavailable");
+                return;
+            }
+
+            try
+            {
+                var stopwatch = Stopwatch.StartNew();
+                var observation = _deepInspectionReader.Read(_activeDeepInspectionKey, renderPrefab, DateTimeOffset.UtcNow);
+                stopwatch.Stop();
+                RecordManagedSlice(stopwatch.Elapsed, 1);
+                _nextAnalysisGeneration = Math.Max(_nextAnalysisGeneration + 1, analysis.AnalysisGeneration + 1);
+                var enriched = analysis.WithDeepInspection(_activeDeepInspectionKey, observation, _nextAnalysisGeneration);
+                session.TransitionTo(ScanStage.Finalizing);
+                session.ReportProgress(1, 1);
+                if (!_publishedState.TryPublishAnalysis(enriched, scanSucceeded: session.CanPublish))
+                {
+                    FailDeepInspection("APA-DEEP-003", "deep_inspection_publish_world_mismatch");
+                    return;
+                }
+                session.Complete();
+                LastDiagnosticCode = observation.Availability == Core.Observations.Availability.Failed ? observation.DiagnosticCode : null;
+                _activeDeepInspectionKey = default;
+            }
+            catch
+            {
+                FailDeepInspection("APA-DEEP-002", "deep_inspection_failed");
+            }
+        }
+
         private void PublishAssetAnalysis(ScanSession session, AssetAnalysisCollector collector)
         {
             if (WorldGeneration != session.WorldGeneration || CatalogGeneration <= 0)
@@ -551,6 +652,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
             _catalogScanRequested = false;
             _assetAuditWaitingForCatalog = false;
             _analysisCollector = null;
+            _activeDeepInspectionKey = default;
             CurrentScan.MarkCancelled();
         }
 
@@ -585,6 +687,15 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
             if (CurrentScan?.State == ScanState.Running || CurrentScan?.State == ScanState.CancellationRequested)
                 CurrentScan.Fail(diagnosticCode);
             _analysisCollector = null;
+        }
+
+        private void FailDeepInspection(string diagnosticCode, string capabilityDetail)
+        {
+            LastDiagnosticCode = diagnosticCode;
+            DegradeCapability(CapabilityId.ShaderDeepInspection, capabilityDetail);
+            if (CurrentScan?.State == ScanState.Running || CurrentScan?.State == ScanState.CancellationRequested)
+                CurrentScan.Fail(diagnosticCode);
+            _activeDeepInspectionKey = default;
         }
 
         private void PollCensusCleanup()

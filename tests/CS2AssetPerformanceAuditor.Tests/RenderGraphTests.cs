@@ -70,6 +70,29 @@ namespace CS2AssetPerformanceAuditor.Tests
         }
 
         [Test]
+        public void Incremental_accumulator_matches_batch_deduplication()
+        {
+            var houseA = Record("House.A", PrefabTraits.Building);
+            var houseB = Record("House.B", PrefabTraits.Building);
+            var sharedKey = new RenderAssetKey("Render.SharedHouse", "RenderPrefab");
+            var runtimeRender = new object();
+            var resolver = new FakeResolver(input => new RenderResolution(
+                RenderCoverage.Supported,
+                new[] { new RenderAssetRecord(sharedKey, "Shared House Mesh") },
+                new[] { new PrefabRenderRelation(input.Prefab.Key, sharedKey, RenderRelationKind.DirectMesh) },
+                runtimeAssets: new[] { new RuntimeRenderAssetBinding(sharedKey, runtimeRender) }));
+            var accumulator = new RenderGraphAccumulator(new[] { resolver });
+
+            accumulator.Add(new RenderGraphInput(houseA, new object()));
+            accumulator.Add(new RenderGraphInput(houseB, new object()));
+            var graph = accumulator.Snapshot();
+
+            Assert.That(graph.RenderAssets, Has.Count.EqualTo(1));
+            Assert.That(graph.Relations, Has.Count.EqualTo(2));
+            Assert.That(graph.RuntimeAssetCount, Is.EqualTo(1));
+        }
+
+        [Test]
         public void Lod_relation_kind_remains_attributable()
         {
             var tree = Record("Tree.Oak", PrefabTraits.Tree);
@@ -106,7 +129,6 @@ namespace CS2AssetPerformanceAuditor.Tests
             }
 
             public bool CanResolve(RenderGraphInput input) => true;
-
             public RenderResolution Resolve(RenderGraphInput input) => _resolve(input);
         }
     }

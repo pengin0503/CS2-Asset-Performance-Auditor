@@ -1,6 +1,7 @@
 import { bindValue, trigger, useValue } from "cs2/api";
 import {
   DEFAULT_ASSET_QUERY_STATE,
+  DEFAULT_EXPORT_REQUEST,
   DEFAULT_SCAN_OPTIONS,
   EMPTY_UI_SNAPSHOT,
   MAX_ASSET_PAGE_SIZE,
@@ -8,6 +9,7 @@ import {
   type AssetQueryRequest,
   type AssetQueryState,
   type CountKind,
+  type ExportRequest,
   type NormalizedUiScanOptions,
   type UiObservation,
   type UiScanOptions,
@@ -43,8 +45,8 @@ export const nativeBindings: AssetAuditorBindings = {
   requestAssetsPage(query: AssetQueryRequest): void {
     trigger(UI_BINDING_GROUP, "queryAssets", JSON.stringify(query));
   },
-  requestExport(): void {
-    trigger(UI_BINDING_GROUP, "requestExport");
+  requestExport(request?: ExportRequest): void {
+    trigger(UI_BINDING_GROUP, "requestExport", JSON.stringify(request ?? DEFAULT_EXPORT_REQUEST));
   },
   updateSettings(options: UiScanOptions): void {
     trigger(UI_BINDING_GROUP, "updateSettings", JSON.stringify(normalizeUiSettings(options)));

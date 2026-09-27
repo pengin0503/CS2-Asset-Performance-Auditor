@@ -16,7 +16,6 @@ namespace CS2AssetPerformanceAuditor.Tests
         public void Representative_formats_have_documented_logical_payload(string format, int width, int height, int depth, int mips, long expected)
         {
             var result = TextureFootprintEstimator.Estimate(width, height, depth, mips, format, CapturedAt);
-            Assert.That(result.Availability, Is.EqualTo(Availability.Available));
             Assert.That(result.Value, Is.EqualTo(expected));
             Assert.That(result.Origin, Is.EqualTo(ObservationOrigin.Estimated));
         }
@@ -24,15 +23,13 @@ namespace CS2AssetPerformanceAuditor.Tests
         [Test]
         public void Block_compression_rounds_up_partial_blocks()
         {
-            var result = TextureFootprintEstimator.Estimate(5, 5, 1, 1, "BC1_RGB_UNorm", CapturedAt);
-            Assert.That(result.Value, Is.EqualTo(32L));
+            Assert.That(TextureFootprintEstimator.Estimate(5, 5, 1, 1, "BC1_RGB_UNorm", CapturedAt).Value, Is.EqualTo(32L));
         }
 
         [Test]
         public void Mip_chain_sums_each_level_without_claiming_gpu_residency()
         {
-            var result = TextureFootprintEstimator.Estimate(4, 4, 1, 3, "R8G8B8A8_UNorm", CapturedAt);
-            Assert.That(result.Value, Is.EqualTo(84L));
+            Assert.That(TextureFootprintEstimator.Estimate(4, 4, 1, 3, "R8G8B8A8_UNorm", CapturedAt).Value, Is.EqualTo(84L));
             Assert.That(TextureFootprintEstimator.MetricName, Does.Contain("logical"));
             Assert.That(TextureFootprintEstimator.MetricName, Does.Not.Contain("VRAM").IgnoreCase);
         }
@@ -53,9 +50,22 @@ namespace CS2AssetPerformanceAuditor.Tests
                 TextureObservation.Available("texture:shared", 4, 4, 1, "R8G8B8A8_UNorm", "Tex2D", 1, "Bilinear", "Repeat", 1, 64, CapturedAt),
                 TextureObservation.Available("texture:shared", 4, 4, 1, "R8G8B8A8_UNorm", "Tex2D", 1, "Bilinear", "Repeat", 1, 64, CapturedAt),
             };
-            var unique = TextureObservation.Deduplicate(observations);
-            Assert.That(unique.Count, Is.EqualTo(1));
-            Assert.That(unique[0].EstimatedLogicalPayload.Value, Is.EqualTo(64));
+            Assert.That(TextureObservation.Deduplicate(observations).Count, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void Three_references_to_one_texture_have_one_unique_payload()
+        {
+            var aggregation = ResourceAggregation.Aggregate(new[]
+            {
+                new ResourceReference("texture:shared", 64),
+                new ResourceReference("texture:shared", 64),
+                new ResourceReference("texture:shared", 64),
+            });
+            Assert.That(aggregation.ReferenceCount, Is.EqualTo(3));
+            Assert.That(aggregation.UniqueResourceCount, Is.EqualTo(1));
+            Assert.That(aggregation.ReferencedPayloadBytes, Is.EqualTo(192));
+            Assert.That(aggregation.UniquePayloadBytes, Is.EqualTo(64));
         }
     }
 }

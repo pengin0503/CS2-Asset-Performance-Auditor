@@ -52,7 +52,24 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Rendering
         {
             if (input == null) throw new ArgumentNullException(nameof(input));
             InputCount++;
-            var resolver = _resolvers.FirstOrDefault(candidate => candidate.CanResolve(input));
+
+            IRenderAssetResolver? resolver = null;
+            try
+            {
+                foreach (var candidate in _resolvers)
+                {
+                    if (!candidate.CanResolve(input))
+                        continue;
+                    resolver = candidate;
+                    break;
+                }
+            }
+            catch
+            {
+                _coverage[input.Prefab.Key] = RenderCoverage.Failed;
+                return;
+            }
+
             if (resolver == null)
             {
                 _coverage[input.Prefab.Key] = RenderCoverage.Unknown;

@@ -159,8 +159,8 @@ namespace CS2AssetPerformanceAuditor.UI
         private static UiAssetRow MapAssetRow(AssetPageItem item, AssetAnalysisSnapshot? analysis)
         {
             PrefabAnalysisEntry? entry = null;
-            if (analysis != null)
-                analysis.TryGetPrefab(item.Asset.Key, out entry!);
+            if (analysis != null && analysis.TryGetPrefab(item.Asset.Key, out var resolvedEntry))
+                entry = resolvedEntry;
 
             return new UiAssetRow
             {
@@ -173,7 +173,7 @@ namespace CS2AssetPerformanceAuditor.UI
                 Instances = MapObservation(item.Instances),
                 Presence = item.Presence.ToString(),
                 Counters = MapCounters(item.CensusEntry),
-                RenderCoverage = entry?.RenderCoverage.ToString() ?? Availability.NotScanned.ToString(),
+                RenderCoverage = entry == null ? Availability.NotScanned.ToString() : FormatRenderCoverage(entry.RenderCoverage),
                 EstimatedTexturePayload = entry == null ? Unscanned() : MapObservation(entry.EstimatedTexturePayload),
                 FindingCount = entry?.Findings.Count ?? 0,
                 Lod0Vertices = entry == null ? Unscanned() : MapObservation(entry.Lod0Vertices),
@@ -254,6 +254,17 @@ namespace CS2AssetPerformanceAuditor.UI
             CapturedAt = FormatTime(observation.CapturedAt),
             DiagnosticCode = observation.DiagnosticCode
         };
+
+        private static string FormatRenderCoverage(RenderCoverage coverage)
+        {
+            switch (coverage)
+            {
+                case RenderCoverage.Supported: return Availability.Available.ToString();
+                case RenderCoverage.NotApplicable: return Availability.NotApplicable.ToString();
+                case RenderCoverage.Failed: return Availability.Failed.ToString();
+                default: return "Unknown";
+            }
+        }
 
         private static UiObservation Unscanned() => new UiObservation { Availability = Availability.NotScanned.ToString(), Origin = ObservationOrigin.Derived.ToString() };
         private static UiDoubleObservation UnscannedDouble() => new UiDoubleObservation { Availability = Availability.NotScanned.ToString(), Origin = ObservationOrigin.Derived.ToString() };

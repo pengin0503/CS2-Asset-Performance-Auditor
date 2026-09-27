@@ -128,18 +128,20 @@ export interface ScanStatusData {
 export interface UiScanOptions {
   collectSubordinateObjects: boolean;
   collectNetworkEdges: boolean;
-  frameBudgetMs: number;
-  progressUpdateMs: number;
-  refreshCatalogAtScanStart: boolean;
-  enableHeuristicFindings: boolean;
-  enablePeerOutliers: boolean;
-  comparisonPopulation: "SameCategory" | "BuiltinDlc" | "Custom" | "SameSourcePack";
-  showNoticeFindings: boolean;
-  pageSize: number;
-  metadataCacheLimit: number;
-  deepInspectionLimit: number;
-  uiScale: number;
+  frameBudgetMs?: number;
+  progressUpdateMs?: number;
+  refreshCatalogAtScanStart?: boolean;
+  enableHeuristicFindings?: boolean;
+  enablePeerOutliers?: boolean;
+  comparisonPopulation?: "SameCategory" | "BuiltinDlc" | "Custom" | "SameSourcePack";
+  showNoticeFindings?: boolean;
+  pageSize?: number;
+  metadataCacheLimit?: number;
+  deepInspectionLimit?: number;
+  uiScale?: number;
 }
+
+export type NormalizedUiScanOptions = Required<UiScanOptions>;
 
 export interface UiCensusCounts {
   topLevelObjects: UiObservation<number>;
@@ -192,7 +194,7 @@ export const DEFAULT_ASSET_QUERY_STATE: AssetQueryState = {
   pageSize: 100,
 };
 
-export const DEFAULT_SCAN_OPTIONS: UiScanOptions = {
+export const DEFAULT_SCAN_OPTIONS: NormalizedUiScanOptions = {
   collectSubordinateObjects: true,
   collectNetworkEdges: true,
   frameBudgetMs: 1,

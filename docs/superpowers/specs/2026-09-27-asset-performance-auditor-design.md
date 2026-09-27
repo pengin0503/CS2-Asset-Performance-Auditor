@@ -369,6 +369,17 @@ This avoids conflating city instance counts with render-resource identity and su
 
 Shared `RenderPrefab`, `GeometryAsset`, `SurfaceAsset`, and `TextureAsset` resources are deduplicated in the observation cache.
 
+### 11.1 Render coverage
+
+The auditor must not imply that every Prefab type has a successfully resolved render graph. Per Prefab, render discovery records a coverage state such as:
+
+- `Supported`
+- `NotApplicable`
+- `Unknown`
+- `Failed`
+
+Phase 2 begins with resolvers backed by verified 1.6.2f1 structures such as `ObjectGeometryPrefab`. Additional Prefab families, including network-specific render paths, require explicit resolvers once their public-access path is verified. Failure to resolve a render path is represented as evidence, not silently treated as zero geometry.
+
 ## 12. Scan model
 
 Scans are explicit user-triggered snapshot operations. There is no default periodic full census or full asset audit.
@@ -430,7 +441,7 @@ CensusCounters
 Examples:
 
 - Top-level placed buildings contribute to `TopLevelObjects` and `LiveObjectReferences`.
-- Owned/controlled child objects contribute to `SubordinateObjects` and `LiveObjectReferences` where the query profile defines them as such.
+- Owned/controlled child objects contribute to `SubordinateObjects` and `LiveObjectReferences`.
 - Network Prefabs use `NetworkEdges` as the primary MVP network exposure metric.
 
 ### 13.1 Why multiple counters exist
@@ -446,15 +457,19 @@ None of these counters is called actual render-instance count or actual render w
 
 ### 13.2 Primary display semantics
 
-Typical primary UI count:
+The generic `Instances` column is a **type-aware primary exposure value**, never a single universal count definition. It carries or exposes a `CountKind` so the UI can explain what was counted.
+
+Initial mapping:
 
 - Building: Top-Level Objects
 - Service Building: Top-Level Objects
-- Prop: Live Object References with breakdown
+- Prop: Live Object References, with Top-Level/Subordinate breakdown
 - Tree: Top-Level Objects
 - Vehicle: active Live Object References at snapshot
 - Network: Network Edges
 - Render-only asset: Census not applicable
+
+The UI must expose the count kind via column metadata, tooltip, detail view, or equivalent so a Building count cannot be mistaken for the same semantic as a Vehicle count.
 
 ### 13.3 Presence state
 
@@ -469,7 +484,21 @@ Internal state uses:
 
 ### 13.4 Query-profile versioning
 
-Census semantics are versioned through `queryProfileVersion`. Any change to inclusion/exclusion semantics that affects comparability requires a version update.
+Census semantics are versioned through `queryProfileVersion`. Any change to inclusion/exclusion or classification semantics that changes the meaning of a counter requires a version update.
+
+User scan options do **not** silently redefine the profile. Options that omit supported data, such as choosing not to collect subordinate counts, are serialized separately as `scanOptions`. Omitted metrics remain `NotScanned`, not zero. Report comparison must warn when query-profile versions are incompatible or when compared scans used materially different scan options.
+
+### 13.5 Census Query Profile v1 logical semantics
+
+The first query profile has the following normative meaning even if exact ECS query construction is optimized during implementation:
+
+- **Current object universe:** current-world object entities carrying `PrefabRef`, excluding temporary/deleted/overridden states that do not represent current city exposure.
+- **Top-Level Object:** an object in that universe that is not owned or controlled as a subordinate entity according to the verified 1.6.2f1 `Owner`/`Controller` semantics.
+- **Subordinate Object:** an object in that universe that is owned or controlled by another entity. An entity that satisfies both subordinate markers is counted once, not twice.
+- **Live Object References:** the union of Top-Level and Subordinate object references included by the profile; therefore a supported object entity contributes at most once to this counter.
+- **Network Edge:** a current, non-temporary, non-overridden top-level network edge carrying `PrefabRef`; child/helper network entities are not folded into the primary `NetworkEdges` metric.
+
+Exact component/query syntax is an adapter concern, but it must preserve these semantics and be covered by contract/runtime validation. If the public API cannot preserve a semantic on a future version, the affected capability degrades instead of quietly changing the meaning of the counter.
 
 ## 14. Census collection implementation strategy
 
@@ -488,9 +517,9 @@ The implementation should minimize per-entity managed allocations and avoid reta
 
 ### 14.1 EntityQuery guidance
 
-Find It demonstrates the feasibility of `PrefabRef` census with `Object`/`Edge` and exclusions such as `Owner`, `Controller`, and `Overridden`. This project uses that as evidence of feasibility but separates logical query profiles so that top-level, subordinate, object, and network semantics remain explicit.
+Find It demonstrates the feasibility of `PrefabRef` census with `Object`/`Edge` and exclusions such as `Owner`, `Controller`, and `Overridden`. This project uses that as evidence of feasibility but uses distinct logical query profiles so top-level, subordinate, object, and network semantics remain explicit.
 
-Deleted, temporary, overridden, or otherwise non-current entities should be excluded where appropriate to the relevant query profile.
+The adapter must implement the Query Profile v1 semantics above and validate its exclusion components against the target DLL/runtime.
 
 ### 14.2 Async job behavior
 
@@ -652,6 +681,12 @@ Deep Inspection is selected-asset-only and may use heavier Unity APIs for:
 - Unity `Mesh` fallback information if a required metric cannot be obtained from safe metadata
 
 Deep Inspection is not automatically run across every asset.
+
+### 21.1 Resource ownership
+
+Deep Inspection must copy required results into domain observations and then release temporary Unity/AssetDatabase resources deterministically. Temporary Materials/Textures/Meshes or loaded property data must be destroyed, unloaded, or disposed through the appropriate API in `finally`-equivalent cleanup paths. The Observation Store must not retain Unity engine objects merely to keep a detail page alive.
+
+If the game API returns a shared object whose lifetime is owned by the game, the adapter must not destroy it; instead it records only safe metadata and follows the API's documented ownership semantics. Resource ownership is therefore an adapter-level contract and must be covered by runtime validation.
 
 ## 22. Analysis evidence classes
 
@@ -845,6 +880,8 @@ Default columns:
 Name | Source | Type | Instances | Geometry | LOD | Materials | Textures | Findings
 ```
 
+`Instances` is the type-aware primary count defined in section 13.2 and must expose its `CountKind`; it is not semantically identical across asset types.
+
 Optional columns can expose detailed metrics such as:
 
 - LOD0 vertices/triangles
@@ -918,7 +955,7 @@ Census table includes semantic counters rather than one ambiguous count:
 Asset | Type | Top-Level | Subordinate | Live Refs | Edges
 ```
 
-Snapshot metadata includes capture time, catalog generation, query-profile version, and total counts.
+Snapshot metadata includes capture time, catalog generation, query-profile version, scan options, and total counts.
 
 Vehicle values are explicitly described as active/present at snapshot where appropriate.
 
@@ -959,6 +996,8 @@ Comparison dimensions include:
 
 Peer context may be shown alongside direct asset comparison. The tool displays evidence and does not automatically declare one asset "better" overall.
 
+Reports/snapshots with incompatible `queryProfileVersion` or materially different scan options must display a compatibility warning before comparing census-derived metrics.
+
 ## 33. Export
 
 ### 33.1 JSON
@@ -970,6 +1009,7 @@ Required report metadata includes:
 - `schemaVersion`
 - `ruleSetVersion`
 - `queryProfileVersion`
+- `scanOptions`
 - `modVersion`
 - `gameVersion`
 - capture timestamps
@@ -1038,6 +1078,8 @@ Settings categories:
 Settings indicate whether changes apply immediately, on the next scan, or require restart.
 
 Automatic periodic full Census, full Asset Audit, and full Deep Inspection are not MVP features.
+
+Settings that change which optional metrics are collected are recorded in `scanOptions`; unavailable/disabled metrics remain `NotScanned` rather than zero.
 
 ## 35. Diagnostics
 
@@ -1191,6 +1233,16 @@ Tests cover:
 - `Unknown`/`Unsupported`
 - finding evidence expansion
 - Escape/close behavior
+- type-aware `Instances`/`CountKind` presentation
+
+### 38.7 Query-profile tests
+
+Tests must verify Query Profile v1 invariants independently of adapter syntax:
+
+- each supported object entity contributes at most once to `LiveObjectReferences`,
+- an entity satisfying multiple subordinate markers is counted once in `SubordinateObjects`,
+- omitted subordinate collection produces `NotScanned`, not zero,
+- incompatible query-profile versions or materially different scan options are detectable during comparison/export workflows.
 
 ## 39. In-game runtime validation
 
@@ -1241,6 +1293,12 @@ Required scenarios include:
 - panel closes
 - scan continues
 - reopening shows current progress
+
+### Deep Inspection ownership
+
+- temporary resources are cleaned up after success, cancellation, and exception paths,
+- shared game-owned resources are not incorrectly destroyed,
+- repeated Deep Inspection does not show unbounded retained Unity-object growth.
 
 ## 40. Performance validation matrix
 
@@ -1305,6 +1363,8 @@ Those remain runtime validation concerns.
 
 ## 44. Phase definitions and completion criteria
 
+Phases 0–4 belong to one product architecture but are intentionally milestone-separated. The implementation plan may be long; it must preserve these phase gates rather than attempting all features as one undifferentiated implementation step.
+
 ### Phase 0 — Compatibility Foundation
 
 - game-version reporting
@@ -1335,7 +1395,8 @@ Required:
 
 Required:
 
-- Prefab -> RenderPrefab relations
+- Prefab -> RenderPrefab relations for verified resolver families
+- explicit render-coverage state for unsupported/unresolved families
 - GeometryAsset metadata
 - mesh/submesh metadata
 - topology-aware triangle counts

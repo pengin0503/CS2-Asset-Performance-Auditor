@@ -8,7 +8,15 @@ import { MaterialDetails } from "./MaterialDetails";
 import { RenderStructure } from "./RenderStructure";
 import { TextureDetails } from "./TextureDetails";
 
-export function AssetDetails({ asset, findings }: { asset: AssetRow; findings: UiFinding[] }): React.JSX.Element {
+export function AssetDetails({
+  asset,
+  findings,
+  onDeepInspect,
+}: {
+  asset: AssetRow;
+  findings: UiFinding[];
+  onDeepInspect?: (renderKey: string) => void;
+}): React.JSX.Element {
   const assetFindings = findings.filter((finding) =>
     (!finding.prefabId || finding.prefabId === asset.prefabId)
     && (!finding.prefabType || finding.prefabType === asset.prefabType));
@@ -31,14 +39,14 @@ export function AssetDetails({ asset, findings }: { asset: AssetRow; findings: U
         <p><strong>{formatCountKind(asset.countKind)}:</strong> {formatObservation(asset.instances)}</p>
         <p className="apa__muted">Instance counts indicate city exposure, not render cost.</p>
       </section>
-      <RenderStructure coverage={asset.renderCoverage ?? "NotScanned"} relations={asset.renderRelations ?? []} />
+      <RenderStructure coverage={asset.renderCoverage ?? "NotScanned"} relations={asset.renderRelations ?? []} onDeepInspect={onDeepInspect} />
       <GeometryDetails asset={asset} />
       <LodDetails asset={asset} />
       <MaterialDetails asset={asset} />
       <TextureDetails payload={asset.estimatedTexturePayload ?? { availability: "NotScanned" }} />
       <section className="apa__detail-section">
         <h3>Findings</h3>
-        {assetFindings.length === 0 ? <p>No findings recorded for this asset.</p> : assetFindings.map((finding) => <EvidencePanel key={finding.ruleId} finding={finding} />)}
+        {assetFindings.length === 0 ? <p>No findings recorded for this asset.</p> : assetFindings.map((finding) => <EvidencePanel key={`${finding.ruleId}:${finding.prefabId ?? "global"}`} finding={finding} />)}
       </section>
     </section>
   );

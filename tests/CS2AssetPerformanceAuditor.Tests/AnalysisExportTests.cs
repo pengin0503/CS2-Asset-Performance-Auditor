@@ -73,6 +73,29 @@ namespace CS2AssetPerformanceAuditor.Tests
         }
 
         [Test]
+        public void Current_report_entrypoint_carries_matching_analysis_hierarchy()
+        {
+            var prefab = new PrefabRecord(new PrefabKey("House.Current", "Building"), "Current House", PrefabTraits.Building, new AssetOriginEvidence(isBuiltin: true));
+            var analysisEntry = new PrefabAnalysisEntry(
+                prefab.Key,
+                RenderCoverage.Supported,
+                Array.Empty<PrefabRenderRelation>(),
+                Observation<long>.FromValue(100, ObservationOrigin.Derived, CapturedAt),
+                Observation<double>.Unavailable(Availability.NotApplicable, ObservationOrigin.Derived, CapturedAt),
+                Observation<long>.FromValue(0, ObservationOrigin.Derived, CapturedAt),
+                Observation<long>.FromValue(0, ObservationOrigin.Derived, CapturedAt),
+                Observation<long>.FromValue(0, ObservationOrigin.Estimated, CapturedAt));
+            var analysis = new AssetAnalysisSnapshot(2, 11, 4, CapturedAt, new[] { analysisEntry }, Array.Empty<RenderAssetAnalysisRecord>());
+            var capabilities = new CapabilityReport("1.6.2f1", CompatibilityState.Untested, Array.Empty<CapabilityStatus>());
+
+            var report = new AuditReportBuilder(new PrivacySanitizer()).BuildCurrent(
+                new[] { prefab }, 11, CapturedAt, null, analysis, capabilities, "0.1.0", CapturedAt);
+
+            Assert.That(report.Analysis.Assets, Has.Length.EqualTo(1));
+            Assert.That(report.Analysis.Assets[0].PrefabId, Is.EqualTo("House.Current"));
+        }
+
+        [Test]
         public void Analysis_from_different_catalog_generation_is_rejected()
         {
             var analysis = new AssetAnalysisSnapshot(1, 4, 1, CapturedAt, Array.Empty<PrefabAnalysisEntry>(), Array.Empty<RenderAssetAnalysisRecord>());

@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Text.Json;
 using CS2AssetPerformanceAuditor.Core.Capabilities;
+using CS2AssetPerformanceAuditor.Core.Census;
 using CS2AssetPerformanceAuditor.Core.Observations;
 using CS2AssetPerformanceAuditor.Core.Prefabs;
 using CS2AssetPerformanceAuditor.Core.Rendering;
@@ -93,6 +94,23 @@ namespace CS2AssetPerformanceAuditor.Tests
 
             Assert.That(report.Analysis.Assets, Has.Length.EqualTo(1));
             Assert.That(report.Analysis.Assets[0].PrefabId, Is.EqualTo("House.Current"));
+        }
+
+        [Test]
+        public void Current_report_entrypoint_omits_snapshots_from_previous_catalog_generation()
+        {
+            var prefab = new PrefabRecord(new PrefabKey("House.Old", "Building"), "Old House", PrefabTraits.Building, new AssetOriginEvidence(isBuiltin: true));
+            var staleCensus = new CensusReducer(new[] { prefab }, 1, 10, CapturedAt, ScanOptions.Default).BuildSnapshot();
+            var staleAnalysis = new AssetAnalysisSnapshot(1, 10, 1, CapturedAt, Array.Empty<PrefabAnalysisEntry>(), Array.Empty<RenderAssetAnalysisRecord>());
+            var capabilities = new CapabilityReport("1.6.2f1", CompatibilityState.Untested, Array.Empty<CapabilityStatus>());
+
+            var report = new AuditReportBuilder(new PrivacySanitizer()).BuildCurrent(
+                new[] { prefab }, 11, CapturedAt, staleCensus, staleAnalysis, capabilities, "0.1.0", CapturedAt);
+
+            Assert.That(report.Census, Is.Empty);
+            Assert.That(report.CensusCatalogGeneration, Is.Null);
+            Assert.That(report.Analysis.Assets, Is.Empty);
+            Assert.That(report.Analysis.RenderAssets, Is.Empty);
         }
 
         [Test]

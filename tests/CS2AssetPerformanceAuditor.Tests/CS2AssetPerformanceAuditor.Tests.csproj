@@ -19,5 +19,6 @@
     <Compile Include="../../src/CS2AssetPerformanceAuditor/GameIntegration/Rendering/IRenderAssetResolver.cs" Link="GameIntegration/Rendering/IRenderAssetResolver.cs" />
     <Compile Include="../../src/CS2AssetPerformanceAuditor/GameIntegration/Rendering/RenderGraphBuilder.cs" Link="GameIntegration/Rendering/RenderGraphBuilder.cs" />
     <Compile Include="../../src/CS2AssetPerformanceAuditor/UI/UiContracts.cs" Link="UI/UiContracts.cs" />
+    <Compile Include="../../src/CS2AssetPerformanceAuditor/UI/UiAnalysisProjection.cs" Link="UI/UiAnalysisProjection.cs" />
   </ItemGroup>
 </Project>

@@ -7,6 +7,7 @@ using CS2AssetPerformanceAuditor.Core.Census;
 using CS2AssetPerformanceAuditor.Core.Diagnostics;
 using CS2AssetPerformanceAuditor.Core.Prefabs;
 using CS2AssetPerformanceAuditor.Core.Query;
+using CS2AssetPerformanceAuditor.Core.Rendering;
 using CS2AssetPerformanceAuditor.Export;
 using CS2AssetPerformanceAuditor.GameIntegration;
 using Game.UI;
@@ -25,6 +26,7 @@ namespace CS2AssetPerformanceAuditor.UI
         private ValueBinding<string>? _exportBinding;
         private AssetAuditSystem? _lastAuditSystem;
         private CensusSnapshot? _lastCensus;
+        private AssetAnalysisSnapshot? _lastAnalysis;
         private long _lastCatalogGeneration = -1;
         private AssetQuery _assetQuery = new AssetQuery();
         private AssetPage _assetPage = new AssetPage(Array.Empty<AssetPageItem>(), 0, 0, 100);
@@ -40,7 +42,8 @@ namespace CS2AssetPerformanceAuditor.UI
             AddBinding(_snapshotBinding);
             AddBinding(_exportBinding);
             AddBinding(new TriggerBinding<string>(UiBindingContract.Group, UiBindingContract.RequestCensus, HandleRequestCensus, new Colossal.UI.Binding.StringReader()));
-            AddBinding(new TriggerBinding(UiBindingContract.Group, UiBindingContract.CancelCensus, HandleCancelCensus));
+            AddBinding(new TriggerBinding<string>(UiBindingContract.Group, "requestAssetAudit", HandleRequestAssetAudit, new Colossal.UI.Binding.StringReader()));
+            AddBinding(new TriggerBinding(UiBindingContract.Group, UiBindingContract.CancelCensus, HandleCancelCurrentScan));
             AddBinding(new TriggerBinding<string>(UiBindingContract.Group, UiBindingContract.QueryAssets, HandleQueryAssets, new Colossal.UI.Binding.StringReader()));
             AddBinding(new TriggerBinding(UiBindingContract.Group, UiBindingContract.RequestExport, HandleRequestExport));
             AddBinding(new TriggerBinding<string>(UiBindingContract.Group, UiBindingContract.UpdateSettings, HandleUpdateSettings, new Colossal.UI.Binding.StringReader()));
@@ -65,6 +68,7 @@ namespace CS2AssetPerformanceAuditor.UI
             _exportBinding = null;
             _lastAuditSystem = null;
             _lastCensus = null;
+            _lastAnalysis = null;
             base.OnDestroy();
         }
 
@@ -93,9 +97,29 @@ namespace CS2AssetPerformanceAuditor.UI
             }
         }
 
-        private void HandleCancelCensus()
+        private void HandleRequestAssetAudit(string optionsJson)
         {
-            GetAuditSystem()?.CancelCensusScan();
+            try
+            {
+                if (UiSnapshotBuilder.TryDeserialize<UiScanOptions>(optionsJson, out var options))
+                    _uiSettings = NormalizeSettings(options);
+                InvalidateExport();
+                GetAuditSystem()?.RequestAssetAudit(
+                    _uiSettings.FrameBudgetMs,
+                    _uiSettings.RefreshCatalogAtScanStart,
+                    _uiSettings.EnableHeuristicFindings);
+                PublishSnapshot(force: true);
+            }
+            catch
+            {
+                _diagnostics.Add("APA-AUD-004", "ui_asset_audit_request_rejected");
+                PublishSnapshot(force: true);
+            }
+        }
+
+        private void HandleCancelCurrentScan()
+        {
+            GetAuditSystem()?.CancelCurrentScan();
             PublishSnapshot(force: true);
         }
 
@@ -139,6 +163,10 @@ namespace CS2AssetPerformanceAuditor.UI
                 return;
             try
             {
+                var currentAnalysis = auditSystem.PublishedAnalysis != null
+                    && auditSystem.PublishedAnalysis.CatalogGeneration == auditSystem.CatalogGeneration
+                    ? auditSystem.PublishedAnalysis
+                    : null;
                 var report = _reportBuilder.Build(
                     auditSystem.CatalogRecords,
                     auditSystem.CatalogGeneration,
@@ -147,7 +175,8 @@ namespace CS2AssetPerformanceAuditor.UI
                     auditSystem.Capabilities,
                     ProjectInfo.ModVersion,
                     DateTimeOffset.UtcNow,
-                    _diagnostics.Snapshot());
+                    _diagnostics.Snapshot(),
+                    findings: currentAnalysis?.Findings);
                 _exportBinding.Update(_reportSerializer.Serialize(report));
             }
             catch
@@ -161,9 +190,11 @@ namespace CS2AssetPerformanceAuditor.UI
         {
             var catalogGeneration = auditSystem?.CatalogGeneration ?? 0;
             var census = auditSystem?.PublishedCensus;
+            var analysis = auditSystem?.PublishedAnalysis;
             var underlyingDataChanged = !ReferenceEquals(auditSystem, _lastAuditSystem)
                 || catalogGeneration != _lastCatalogGeneration
-                || !ReferenceEquals(census, _lastCensus);
+                || !ReferenceEquals(census, _lastCensus)
+                || !ReferenceEquals(analysis, _lastAnalysis);
             var changed = force || underlyingDataChanged;
             if (!changed)
                 return false;
@@ -175,6 +206,7 @@ namespace CS2AssetPerformanceAuditor.UI
             _lastAuditSystem = auditSystem;
             _lastCatalogGeneration = catalogGeneration;
             _lastCensus = census;
+            _lastAnalysis = analysis;
             return true;
         }
 

@@ -8,6 +8,7 @@ import {
   type AssetQueryRequest,
   type AssetQueryState,
   type CountKind,
+  type NormalizedUiScanOptions,
   type UiObservation,
   type UiScanOptions,
   type UiSnapshot,
@@ -70,12 +71,18 @@ export function updateAssetQueryState(
   };
 }
 
-export function normalizeUiSettings(settings: Partial<UiScanOptions>): UiScanOptions {
+export function normalizeUiSettings(settings: Partial<UiScanOptions>): NormalizedUiScanOptions {
   const merged = { ...DEFAULT_SCAN_OPTIONS, ...settings };
   return {
-    ...merged,
+    collectSubordinateObjects: merged.collectSubordinateObjects ?? DEFAULT_SCAN_OPTIONS.collectSubordinateObjects,
+    collectNetworkEdges: merged.collectNetworkEdges ?? DEFAULT_SCAN_OPTIONS.collectNetworkEdges,
     frameBudgetMs: clampFinite(merged.frameBudgetMs, 0.25, 8, DEFAULT_SCAN_OPTIONS.frameBudgetMs),
     progressUpdateMs: clampFinite(merged.progressUpdateMs, 50, 2000, DEFAULT_SCAN_OPTIONS.progressUpdateMs),
+    refreshCatalogAtScanStart: merged.refreshCatalogAtScanStart ?? DEFAULT_SCAN_OPTIONS.refreshCatalogAtScanStart,
+    enableHeuristicFindings: merged.enableHeuristicFindings ?? DEFAULT_SCAN_OPTIONS.enableHeuristicFindings,
+    enablePeerOutliers: merged.enablePeerOutliers ?? DEFAULT_SCAN_OPTIONS.enablePeerOutliers,
+    comparisonPopulation: merged.comparisonPopulation ?? DEFAULT_SCAN_OPTIONS.comparisonPopulation,
+    showNoticeFindings: merged.showNoticeFindings ?? DEFAULT_SCAN_OPTIONS.showNoticeFindings,
     pageSize: Math.round(clampFinite(merged.pageSize, 25, MAX_ASSET_PAGE_SIZE, DEFAULT_SCAN_OPTIONS.pageSize)),
     metadataCacheLimit: Math.round(clampFinite(merged.metadataCacheLimit, 64, 4096, DEFAULT_SCAN_OPTIONS.metadataCacheLimit)),
     deepInspectionLimit: Math.round(clampFinite(merged.deepInspectionLimit, 1, 16, DEFAULT_SCAN_OPTIONS.deepInspectionLimit)),
@@ -83,8 +90,8 @@ export function normalizeUiSettings(settings: Partial<UiScanOptions>): UiScanOpt
   };
 }
 
-function clampFinite(value: number, minimum: number, maximum: number, fallback: number): number {
-  if (!Number.isFinite(value)) return fallback;
+function clampFinite(value: number | undefined, minimum: number, maximum: number, fallback: number): number {
+  if (value === undefined || !Number.isFinite(value)) return fallback;
   return Math.min(maximum, Math.max(minimum, value));
 }
 

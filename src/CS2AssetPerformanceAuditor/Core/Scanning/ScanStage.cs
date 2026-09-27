@@ -10,6 +10,11 @@ namespace CS2AssetPerformanceAuditor.Core.Scanning
         ReducingObjectCensus,
         CapturingNetworkCensus,
         ReducingNetworkCensus,
+        ResolvingRenderGraph,
+        CollectingGeometry,
+        CollectingSurfaceTexture,
+        EvaluatingFindings,
+        DeepInspecting,
         Finalizing,
         Completed
     }

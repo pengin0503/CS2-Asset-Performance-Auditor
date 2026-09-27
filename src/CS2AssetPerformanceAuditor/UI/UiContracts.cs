@@ -125,12 +125,34 @@ namespace CS2AssetPerformanceAuditor.UI
     }
 
     [DataContract]
+    public sealed class UiMaterialBinding
+    {
+        [DataMember(Name = "materialName", Order = 1)] public string MaterialName { get; set; } = string.Empty;
+        [DataMember(Name = "shaderName", Order = 2)] public string ShaderName { get; set; } = string.Empty;
+        [DataMember(Name = "shaderKeywords", Order = 3)] public string[] ShaderKeywords { get; set; } = new string[0];
+        [DataMember(Name = "renderQueue", Order = 4)] public int RenderQueue { get; set; }
+        [DataMember(Name = "passCount", Order = 5)] public int PassCount { get; set; }
+        [DataMember(Name = "enableInstancing", Order = 6)] public bool EnableInstancing { get; set; }
+    }
+
+    [DataContract]
+    public sealed class UiDeepInspection
+    {
+        [DataMember(Name = "availability", Order = 1)] public string Availability { get; set; } = "NotScanned";
+        [DataMember(Name = "capturedAt", Order = 2, EmitDefaultValue = true)] public string? CapturedAt { get; set; }
+        [DataMember(Name = "diagnosticCode", Order = 3, EmitDefaultValue = true)] public string? DiagnosticCode { get; set; }
+        [DataMember(Name = "materials", Order = 4)] public UiMaterialBinding[] Materials { get; set; } = new UiMaterialBinding[0];
+        [DataMember(Name = "surfaceAssetIds", Order = 5)] public string[] SurfaceAssetIds { get; set; } = new string[0];
+    }
+
+    [DataContract]
     public sealed class UiRenderRelation
     {
         [DataMember(Name = "kind", Order = 1)] public string Kind { get; set; } = string.Empty;
         [DataMember(Name = "from", Order = 2)] public string From { get; set; } = string.Empty;
         [DataMember(Name = "to", Order = 3)] public string To { get; set; } = string.Empty;
         [DataMember(Name = "lodLevel", Order = 4, EmitDefaultValue = true)] public int? LodLevel { get; set; }
+        [DataMember(Name = "deepInspection", Order = 5, EmitDefaultValue = true)] public UiDeepInspection? DeepInspection { get; set; }
     }
 
     [DataContract]

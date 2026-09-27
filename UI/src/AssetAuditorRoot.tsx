@@ -98,7 +98,7 @@ export function AssetAuditorRoot({
           </nav>
           <div className="apa__panel-body">
             {activeTab === "Overview" ? <OverviewTab snapshot={snapshot} bindings={bindings} /> : null}
-            {activeTab === "Assets" ? <AssetsTab page={snapshot.assetPage} query={query} onQueryChange={updateQuery} findings={visibleFindings} /> : null}
+            {activeTab === "Assets" ? <AssetsTab page={snapshot.assetPage} query={query} onQueryChange={updateQuery} findings={visibleFindings} onDeepInspect={(renderKey) => bindings.requestDeepInspection(renderKey)} /> : null}
             {activeTab === "Census" ? <CensusTab snapshot={snapshot} /> : null}
             {activeTab === "Warnings" ? <WarningsTab findings={visibleFindings} /> : null}
             {activeTab === "Compare" ? <CompareTab assets={snapshot.assetPage.items.slice(0, 4)} findings={visibleFindings} /> : null}

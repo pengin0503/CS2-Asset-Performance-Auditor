@@ -4,6 +4,7 @@ using System.Linq;
 using CS2AssetPerformanceAuditor.Core.Capabilities;
 using CS2AssetPerformanceAuditor.Core.Census;
 using CS2AssetPerformanceAuditor.Core.Diagnostics;
+using CS2AssetPerformanceAuditor.Core.Findings;
 using CS2AssetPerformanceAuditor.Core.Observations;
 using CS2AssetPerformanceAuditor.Core.Prefabs;
 
@@ -26,23 +27,24 @@ namespace CS2AssetPerformanceAuditor.Export
             CapabilityReport capabilities,
             string modVersion,
             DateTimeOffset generatedAt,
-            IEnumerable<DiagnosticAggregate>? diagnostics = null)
+            IEnumerable<DiagnosticAggregate>? diagnostics = null,
+            IEnumerable<Finding>? findings = null,
+            ExportScope scope = ExportScope.Full,
+            IEnumerable<PrefabKey>? includedKeys = null)
         {
-            if (catalog == null)
-                throw new ArgumentNullException(nameof(catalog));
-            if (capabilities == null)
-                throw new ArgumentNullException(nameof(capabilities));
-            if (string.IsNullOrWhiteSpace(modVersion))
-                throw new ArgumentException("A mod version is required.", nameof(modVersion));
+            if (catalog == null) throw new ArgumentNullException(nameof(catalog));
+            if (capabilities == null) throw new ArgumentNullException(nameof(capabilities));
+            if (string.IsNullOrWhiteSpace(modVersion)) throw new ArgumentException("A mod version is required.", nameof(modVersion));
             if (census != null && census.CatalogGeneration != catalogGeneration)
                 throw new InvalidOperationException("Cannot export a Census snapshot against a different Prefab catalog generation.");
+            if (!Enum.IsDefined(typeof(ExportScope), scope)) throw new ArgumentOutOfRangeException(nameof(scope));
 
             var records = catalog.ToArray();
-            var orderedRecords = records
-                .OrderBy(record => record.Key.PrefabType, StringComparer.Ordinal)
-                .ThenBy(record => record.Key.PrefabId, StringComparer.Ordinal)
-                .ToArray();
-            var censusEntries = census?.Entries ?? Array.Empty<CensusEntry>();
+            var allFindings = (findings ?? Array.Empty<Finding>()).ToArray();
+            var keySet = includedKeys == null ? null : new HashSet<PrefabKey>(includedKeys);
+            var scopedRecords = ScopeRecords(records, scope, keySet);
+            var scopedCensus = ScopeCensus(census?.Entries ?? Array.Empty<CensusEntry>(), scope, keySet);
+            var scopedFindings = ScopeFindings(allFindings, scope, keySet);
 
             return new AuditReport
             {
@@ -68,25 +70,58 @@ namespace CS2AssetPerformanceAuditor.Export
                     Compatibility = capabilities.Compatibility.ToString(),
                     Capabilities = capabilities.Capabilities.Select(MapCapability).ToArray()
                 },
-                Catalog = orderedRecords.Select(MapPrefab).ToArray(),
-                Census = censusEntries.Select(MapCensusEntry).ToArray(),
+                Catalog = scopedRecords
+                    .OrderBy(record => record.Key.PrefabType, StringComparer.Ordinal)
+                    .ThenBy(record => record.Key.PrefabId, StringComparer.Ordinal)
+                    .Select(MapPrefab).ToArray(),
+                Census = scopedCensus
+                    .OrderBy(entry => entry.Key.PrefabType, StringComparer.Ordinal)
+                    .ThenBy(entry => entry.Key.PrefabId, StringComparer.Ordinal)
+                    .Select(MapCensusEntry).ToArray(),
                 Diagnostics = (diagnostics ?? Array.Empty<DiagnosticAggregate>())
                     .OrderBy(diagnostic => diagnostic.Code.Value, StringComparer.Ordinal)
                     .ThenBy(diagnostic => diagnostic.Message, StringComparer.Ordinal)
-                    .Select(MapDiagnostic)
-                    .ToArray()
+                    .Select(MapDiagnostic).ToArray(),
+                ExportScope = scope.ToString(),
+                Analysis = new ReportAnalysis
+                {
+                    Findings = scopedFindings
+                        .OrderBy(finding => finding.RuleId, StringComparer.Ordinal)
+                        .ThenBy(finding => finding.Title, StringComparer.Ordinal)
+                        .Select(MapFinding).ToArray()
+                }
             };
         }
 
-        private ReportCapability MapCapability(CapabilityStatus status)
+        private static IEnumerable<PrefabRecord> ScopeRecords(IEnumerable<PrefabRecord> records, ExportScope scope, HashSet<PrefabKey>? keys)
         {
-            return new ReportCapability
-            {
-                Id = status.Id.ToString(),
-                State = status.State.ToString(),
-                Detail = status.Detail == null ? null : _sanitizer.SanitizeText(status.Detail)
-            };
+            if (scope == ExportScope.Census || scope == ExportScope.Findings) return Array.Empty<PrefabRecord>();
+            if (scope == ExportScope.Filtered || scope == ExportScope.Selected)
+                return keys == null ? Array.Empty<PrefabRecord>() : records.Where(record => keys.Contains(record.Key));
+            return records;
         }
+
+        private static IEnumerable<CensusEntry> ScopeCensus(IEnumerable<CensusEntry> entries, ExportScope scope, HashSet<PrefabKey>? keys)
+        {
+            if (scope == ExportScope.Findings) return Array.Empty<CensusEntry>();
+            if (scope == ExportScope.Filtered || scope == ExportScope.Selected)
+                return keys == null ? Array.Empty<CensusEntry>() : entries.Where(entry => keys.Contains(entry.Key));
+            return entries;
+        }
+
+        private static IEnumerable<Finding> ScopeFindings(IEnumerable<Finding> findings, ExportScope scope, HashSet<PrefabKey>? keys)
+        {
+            if (scope == ExportScope.Census) return Array.Empty<Finding>();
+            if (scope != ExportScope.Filtered && scope != ExportScope.Selected) return findings;
+            if (keys == null) return Array.Empty<Finding>();
+            var ids = new HashSet<string>(keys.Select(key => key.PrefabId), StringComparer.Ordinal);
+            return findings.Where(finding => finding.Evidence.Any(evidence => evidence.StartsWith("asset=", StringComparison.Ordinal) && ids.Contains(evidence.Substring("asset=".Length))));
+        }
+
+        private ReportCapability MapCapability(CapabilityStatus status) => new ReportCapability
+        {
+            Id = status.Id.ToString(), State = status.State.ToString(), Detail = status.Detail == null ? null : _sanitizer.SanitizeText(status.Detail)
+        };
 
         private ReportPrefab MapPrefab(PrefabRecord record)
         {
@@ -125,35 +160,37 @@ namespace CS2AssetPerformanceAuditor.Export
             };
         }
 
-        private ReportObservation MapObservation(Observation<long> observation)
+        private ReportFinding MapFinding(Finding finding) => new ReportFinding
         {
-            return new ReportObservation
-            {
-                Availability = observation.Availability.ToString(),
-                Origin = observation.Origin.ToString(),
-                CapturedAt = FormatTime(observation.CapturedAt),
-                Value = observation.HasValue ? observation.Value : (long?)null,
-                DiagnosticCode = observation.DiagnosticCode == null ? null : _sanitizer.SanitizeText(observation.DiagnosticCode)
-            };
-        }
+            RuleId = _sanitizer.SanitizeText(finding.RuleId),
+            Status = finding.Status.ToString(),
+            Category = finding.Category.ToString(),
+            Title = _sanitizer.SanitizeText(finding.Title),
+            Explanation = _sanitizer.SanitizeText(finding.Explanation),
+            Evidence = finding.Evidence.Select(_sanitizer.SanitizeText).ToArray(),
+            Basis = finding.Basis.ToString(),
+            RuleVersion = _sanitizer.SanitizeText(finding.RuleVersion)
+        };
 
-        private ReportDiagnostic MapDiagnostic(DiagnosticAggregate diagnostic)
+        private ReportObservation MapObservation(Observation<long> observation) => new ReportObservation
         {
-            return new ReportDiagnostic
-            {
-                Code = diagnostic.Code.Value,
-                Message = _sanitizer.SanitizeText(diagnostic.Message),
-                Count = diagnostic.Count,
-                FirstSeenAt = FormatTime(diagnostic.FirstSeenAt),
-                LastSeenAt = FormatTime(diagnostic.LastSeenAt)
-            };
-        }
+            Availability = observation.Availability.ToString(),
+            Origin = observation.Origin.ToString(),
+            CapturedAt = FormatTime(observation.CapturedAt),
+            Value = observation.HasValue ? observation.Value : (long?)null,
+            DiagnosticCode = observation.DiagnosticCode == null ? null : _sanitizer.SanitizeText(observation.DiagnosticCode)
+        };
 
-        private string[]? SanitizeIdentifiers(IReadOnlyList<string>? identifiers)
+        private ReportDiagnostic MapDiagnostic(DiagnosticAggregate diagnostic) => new ReportDiagnostic
         {
-            return identifiers?.Select(_sanitizer.SanitizeText).ToArray();
-        }
+            Code = diagnostic.Code.Value,
+            Message = _sanitizer.SanitizeText(diagnostic.Message),
+            Count = diagnostic.Count,
+            FirstSeenAt = FormatTime(diagnostic.FirstSeenAt),
+            LastSeenAt = FormatTime(diagnostic.LastSeenAt)
+        };
 
+        private string[]? SanitizeIdentifiers(IReadOnlyList<string>? identifiers) => identifiers?.Select(_sanitizer.SanitizeText).ToArray();
         private static string FormatTime(DateTimeOffset value) => value.ToUniversalTime().ToString("O");
     }
 }

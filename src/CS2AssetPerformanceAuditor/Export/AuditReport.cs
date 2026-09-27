@@ -2,6 +2,15 @@ using System.Runtime.Serialization;
 
 namespace CS2AssetPerformanceAuditor.Export
 {
+    public enum ExportScope
+    {
+        Full,
+        Filtered,
+        Selected,
+        Census,
+        Findings
+    }
+
     [DataContract]
     public sealed class AuditReport
     {
@@ -21,33 +30,50 @@ namespace CS2AssetPerformanceAuditor.Export
         [DataMember(Name = "catalog", Order = 14)] public ReportPrefab[] Catalog { get; set; } = new ReportPrefab[0];
         [DataMember(Name = "census", Order = 15)] public ReportCensusEntry[] Census { get; set; } = new ReportCensusEntry[0];
         [DataMember(Name = "diagnostics", Order = 16)] public ReportDiagnostic[] Diagnostics { get; set; } = new ReportDiagnostic[0];
+        [DataMember(Name = "exportScope", Order = 17)] public string ExportScope { get; set; } = "Full";
+        [DataMember(Name = "analysis", Order = 18)] public ReportAnalysis Analysis { get; set; } = new ReportAnalysis();
     }
 
     [DataContract]
-    public sealed class ReportCapabilityReport
+    public sealed class ReportAnalysis
+    {
+        [DataMember(Name = "findings", Order = 1)] public ReportFinding[] Findings { get; set; } = new ReportFinding[0];
+    }
+
+    [DataContract]
+    public sealed class ReportFinding
+    {
+        [DataMember(Name = "ruleId", Order = 1)] public string RuleId { get; set; } = string.Empty;
+        [DataMember(Name = "status", Order = 2)] public string Status { get; set; } = string.Empty;
+        [DataMember(Name = "category", Order = 3)] public string Category { get; set; } = string.Empty;
+        [DataMember(Name = "title", Order = 4)] public string Title { get; set; } = string.Empty;
+        [DataMember(Name = "explanation", Order = 5)] public string Explanation { get; set; } = string.Empty;
+        [DataMember(Name = "evidence", Order = 6)] public string[] Evidence { get; set; } = new string[0];
+        [DataMember(Name = "basis", Order = 7)] public string Basis { get; set; } = string.Empty;
+        [DataMember(Name = "ruleVersion", Order = 8)] public string RuleVersion { get; set; } = string.Empty;
+    }
+
+    [DataContract] public sealed class ReportCapabilityReport
     {
         [DataMember(Name = "compatibility", Order = 1)] public string Compatibility { get; set; } = string.Empty;
         [DataMember(Name = "capabilities", Order = 2)] public ReportCapability[] Capabilities { get; set; } = new ReportCapability[0];
     }
 
-    [DataContract]
-    public sealed class ReportScanOptions
+    [DataContract] public sealed class ReportScanOptions
     {
         [DataMember(Name = "wasCensusScanned", Order = 1)] public bool WasCensusScanned { get; set; }
         [DataMember(Name = "collectSubordinateObjects", Order = 2, EmitDefaultValue = true)] public bool? CollectSubordinateObjects { get; set; }
         [DataMember(Name = "collectNetworkEdges", Order = 3, EmitDefaultValue = true)] public bool? CollectNetworkEdges { get; set; }
     }
 
-    [DataContract]
-    public sealed class ReportCapability
+    [DataContract] public sealed class ReportCapability
     {
         [DataMember(Name = "id", Order = 1)] public string Id { get; set; } = string.Empty;
         [DataMember(Name = "state", Order = 2)] public string State { get; set; } = string.Empty;
         [DataMember(Name = "detail", Order = 3, EmitDefaultValue = true)] public string? Detail { get; set; }
     }
 
-    [DataContract]
-    public sealed class ReportPrefab
+    [DataContract] public sealed class ReportPrefab
     {
         [DataMember(Name = "prefabId", Order = 1)] public string PrefabId { get; set; } = string.Empty;
         [DataMember(Name = "prefabType", Order = 2)] public string PrefabType { get; set; } = string.Empty;
@@ -62,8 +88,7 @@ namespace CS2AssetPerformanceAuditor.Export
         [DataMember(Name = "paradoxModsPlatformId", Order = 11, EmitDefaultValue = true)] public string? ParadoxModsPlatformId { get; set; }
     }
 
-    [DataContract]
-    public sealed class ReportObservation
+    [DataContract] public sealed class ReportObservation
     {
         [DataMember(Name = "availability", Order = 1)] public string Availability { get; set; } = string.Empty;
         [DataMember(Name = "origin", Order = 2)] public string Origin { get; set; } = string.Empty;
@@ -72,8 +97,7 @@ namespace CS2AssetPerformanceAuditor.Export
         [DataMember(Name = "diagnosticCode", Order = 5, EmitDefaultValue = true)] public string? DiagnosticCode { get; set; }
     }
 
-    [DataContract]
-    public sealed class ReportCensusCounters
+    [DataContract] public sealed class ReportCensusCounters
     {
         [DataMember(Name = "topLevelObjects", Order = 1)] public ReportObservation TopLevelObjects { get; set; } = new ReportObservation();
         [DataMember(Name = "subordinateObjects", Order = 2)] public ReportObservation SubordinateObjects { get; set; } = new ReportObservation();
@@ -81,8 +105,7 @@ namespace CS2AssetPerformanceAuditor.Export
         [DataMember(Name = "networkEdges", Order = 4)] public ReportObservation NetworkEdges { get; set; } = new ReportObservation();
     }
 
-    [DataContract]
-    public sealed class ReportCensusEntry
+    [DataContract] public sealed class ReportCensusEntry
     {
         [DataMember(Name = "prefabId", Order = 1)] public string PrefabId { get; set; } = string.Empty;
         [DataMember(Name = "prefabType", Order = 2)] public string PrefabType { get; set; } = string.Empty;
@@ -90,8 +113,7 @@ namespace CS2AssetPerformanceAuditor.Export
         [DataMember(Name = "counters", Order = 4)] public ReportCensusCounters Counters { get; set; } = new ReportCensusCounters();
     }
 
-    [DataContract]
-    public sealed class ReportDiagnostic
+    [DataContract] public sealed class ReportDiagnostic
     {
         [DataMember(Name = "code", Order = 1)] public string Code { get; set; } = string.Empty;
         [DataMember(Name = "message", Order = 2)] public string Message { get; set; } = string.Empty;

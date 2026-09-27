@@ -7,11 +7,11 @@ namespace CS2AssetPerformanceAuditor.Export
 {
     public sealed class AuditReportSerializer
     {
-        public string Serialize(AuditReport report)
-        {
-            if (report == null)
-                throw new ArgumentNullException(nameof(report));
+        public string Serialize(AuditReport report) => SerializeJson(report);
 
+        public string SerializeJson(AuditReport report)
+        {
+            if (report == null) throw new ArgumentNullException(nameof(report));
             var serializer = new DataContractJsonSerializer(typeof(AuditReport));
             using (var stream = new MemoryStream())
             {

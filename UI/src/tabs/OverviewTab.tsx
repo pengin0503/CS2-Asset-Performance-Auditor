@@ -36,9 +36,6 @@ export function OverviewTab({
           >
             Run Asset Audit
           </button>
-          <button type="button" className="apa__button" onClick={bindings.requestExport}>
-            Prepare JSON export
-          </button>
         </div>
       </div>
 

@@ -46,6 +46,30 @@ namespace CS2AssetPerformanceAuditor.Tests
         }
 
         [Test]
+        public void Runtime_render_asset_binding_is_deduplicated_by_stable_render_key()
+        {
+            var houseA = Record("House.A", PrefabTraits.Building);
+            var houseB = Record("House.B", PrefabTraits.Building);
+            var sharedKey = new RenderAssetKey("Render.SharedHouse", "RenderPrefab");
+            var runtimeRender = new object();
+            var resolver = new FakeResolver(input => new RenderResolution(
+                RenderCoverage.Supported,
+                new[] { new RenderAssetRecord(sharedKey, "Shared House Mesh") },
+                new[] { new PrefabRenderRelation(input.Prefab.Key, sharedKey, RenderRelationKind.DirectMesh) },
+                runtimeAssets: new[] { new RuntimeRenderAssetBinding(sharedKey, runtimeRender) }));
+
+            var graph = new RenderGraphBuilder(new[] { resolver }).Build(new[]
+            {
+                new RenderGraphInput(houseA, new object()),
+                new RenderGraphInput(houseB, new object())
+            });
+
+            Assert.That(graph.RuntimeAssetCount, Is.EqualTo(1));
+            Assert.That(graph.TryGetRuntimeAsset(sharedKey, out var resolved), Is.True);
+            Assert.That(resolved, Is.SameAs(runtimeRender));
+        }
+
+        [Test]
         public void Lod_relation_kind_remains_attributable()
         {
             var tree = Record("Tree.Oak", PrefabTraits.Tree);

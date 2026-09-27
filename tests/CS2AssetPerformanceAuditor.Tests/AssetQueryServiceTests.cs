@@ -89,6 +89,19 @@ namespace CS2AssetPerformanceAuditor.Tests
             Assert.That(row.Presence, Is.EqualTo(CensusPresence.Unknown));
         }
 
+        [Test]
+        public void CensusFromAnOlderCatalogGenerationDoesNotJoinCurrentAssetRows()
+        {
+            var house = Record("house", "House", PrefabTraits.Building);
+            var reducer = new CensusReducer(new[] { house }, 3, 8, CapturedAt, ScanOptions.Default);
+            reducer.AddObject(house.Key, isSubordinate: false);
+            var row = new AssetQueryService(new[] { house }, reducer.BuildSnapshot(), catalogGeneration: 9)
+                .Query(new AssetQuery()).Items.Single();
+
+            Assert.That(row.Instances.Availability, Is.EqualTo(Availability.NotScanned));
+            Assert.That(row.Presence, Is.EqualTo(CensusPresence.Unknown));
+        }
+
         private static PrefabRecord[] CreateCatalog()
         {
             return new[]

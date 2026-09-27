@@ -14,12 +14,14 @@ namespace CS2AssetPerformanceAuditor.Core.Query
         private readonly IReadOnlyList<PrefabRecord> _catalog;
         private readonly CensusSnapshot? _census;
 
-        public AssetQueryService(IEnumerable<PrefabRecord> catalog, CensusSnapshot? census)
+        public AssetQueryService(IEnumerable<PrefabRecord> catalog, CensusSnapshot? census, long? catalogGeneration = null)
         {
             if (catalog == null)
                 throw new ArgumentNullException(nameof(catalog));
             _catalog = Array.AsReadOnly(catalog.ToArray());
-            _census = census;
+            _census = census != null && catalogGeneration.HasValue && census.CatalogGeneration != catalogGeneration.Value
+                ? null
+                : census;
         }
 
         public AssetPage Query(AssetQuery query)

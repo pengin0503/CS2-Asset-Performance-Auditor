@@ -110,6 +110,27 @@ namespace CS2AssetPerformanceAuditor.AdapterTests
         }
 
         [Test]
+        public void Ui_system_supports_the_value_and_trigger_bindings_used_by_phase_one()
+        {
+            var uiSystem = GameType("Game.UI.UISystemBase");
+            var bindingMethods = BindingFlags.Instance | BindingFlags.NonPublic;
+            var addBinding = uiSystem.GetMethod("AddBinding", bindingMethods);
+            var addUpdateBinding = uiSystem.GetMethod("AddUpdateBinding", bindingMethods);
+            var valueBinding = GameType("Colossal.UI.Binding.ValueBinding`1");
+            var triggerBinding = GameType("Colossal.UI.Binding.TriggerBinding`1");
+            var stringReader = GameType("Colossal.UI.Binding.StringReader");
+
+            Assert.That(addBinding?.GetParameters().Single().ParameterType.FullName, Is.EqualTo("Colossal.UI.Binding.IBinding"));
+            Assert.That(addUpdateBinding?.GetParameters().Single().ParameterType.FullName, Is.EqualTo("Colossal.UI.Binding.IUpdateBinding"));
+            Assert.That(valueBinding.GetMethod("Update", PublicInstance)?.GetParameters().Single().ParameterType.Name, Is.EqualTo("T"));
+            Assert.That(triggerBinding.GetConstructors(PublicInstance)
+                .Any(constructor => constructor.GetParameters().Length == 4
+                    && constructor.GetParameters()[1].ParameterType.FullName == "System.String"
+                    && constructor.GetParameters()[3].ParameterType.GetGenericTypeDefinition().FullName == "Colossal.UI.Binding.IReader`1"), Is.True);
+            Assert.That(stringReader.IsPublic, Is.True);
+        }
+
+        [Test]
         public void Prefab_classification_and_source_markers_are_available_as_public_api()
         {
             var prefabBase = GameType("Game.Prefabs.PrefabBase");

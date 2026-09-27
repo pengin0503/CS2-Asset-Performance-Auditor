@@ -7,5 +7,7 @@ namespace CS2AssetPerformanceAuditor.Core
         public static bool UsesHarmony { get; } = false;
 
         public static string TargetGameVersion { get; } = "1.6.2f1";
+
+        public static string ModVersion { get; } = "0.1.0";
     }
 }

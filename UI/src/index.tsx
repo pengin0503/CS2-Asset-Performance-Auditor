@@ -1,8 +1,19 @@
 import React from "react";
-import { createRoot } from "react-dom/client";
+import type { ModRegistrar } from "cs2/modding";
+import assetAuditorStyles from "./assetAuditor.module.scss?raw";
 import { AssetAuditorRoot } from "./AssetAuditorRoot";
 
-const mount = document.getElementById("root");
-if (mount) {
-  createRoot(mount).render(<AssetAuditorRoot />);
+export function AssetAuditorModule(): React.JSX.Element {
+  return (
+    <>
+      <style>{assetAuditorStyles}</style>
+      <AssetAuditorRoot />
+    </>
+  );
 }
+
+const register: ModRegistrar = (moduleRegistry) => {
+  moduleRegistry.append("GameTopLeft", AssetAuditorModule);
+};
+
+export default register;

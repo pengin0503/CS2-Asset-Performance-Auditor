@@ -37,13 +37,15 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
 
         public long CatalogGeneration => _catalog?.CatalogGeneration ?? 0;
 
+        public System.DateTimeOffset CatalogCapturedAt => _catalog?.CatalogCapturedAt ?? System.DateTimeOffset.MinValue;
+
+        public IReadOnlyList<PrefabRecord> CatalogRecords => _catalog?.PublishedRecords ?? System.Array.Empty<PrefabRecord>();
+
         public int CatalogCapturedEntityCount => _catalog?.CapturedEntityCount ?? 0;
 
         public int CatalogProcessedEntityCount => _catalog?.ProcessedEntityCount ?? 0;
 
         public int CatalogUnresolvedEntityCount => _catalog?.UnresolvedEntityCount ?? 0;
-
-        public IReadOnlyList<PrefabRecord> CatalogRecords => _catalog?.PublishedRecords ?? System.Array.Empty<PrefabRecord>();
 
         public IReadOnlyDictionary<Entity, PrefabKey> RuntimeEntityKeys => _catalog?.RuntimeEntityKeys
             ?? new Dictionary<Entity, PrefabKey>();

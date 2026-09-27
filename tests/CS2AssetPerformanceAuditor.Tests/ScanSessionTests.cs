@@ -35,6 +35,35 @@ namespace CS2AssetPerformanceAuditor.Tests
         }
 
         [Test]
+        public void Asset_audit_uses_analysis_specific_stages_and_progress_count()
+        {
+            var session = ScanSession.Start(ScanKind.AssetAudit, 1, StartedAt);
+
+            session.TransitionTo(ScanStage.ResolvingRenderGraph);
+            Assert.That(session.Progress.StageNumber, Is.EqualTo(2));
+            Assert.That(session.Progress.TotalStages, Is.EqualTo(6));
+            session.TransitionTo(ScanStage.CollectingGeometry);
+            session.TransitionTo(ScanStage.CollectingSurfaceTexture);
+            session.TransitionTo(ScanStage.EvaluatingFindings);
+            session.TransitionTo(ScanStage.Finalizing);
+
+            Assert.That(session.CanPublish, Is.True);
+            session.Complete();
+            Assert.That(session.Progress.TotalStages, Is.EqualTo(6));
+        }
+
+        [Test]
+        public void Deep_inspection_has_selected_asset_only_stage_sequence()
+        {
+            var session = ScanSession.Start(ScanKind.DeepInspection, 1, StartedAt);
+            session.TransitionTo(ScanStage.DeepInspecting);
+            Assert.That(session.Progress.StageNumber, Is.EqualTo(2));
+            Assert.That(session.Progress.TotalStages, Is.EqualTo(3));
+            session.TransitionTo(ScanStage.Finalizing);
+            Assert.That(session.CanPublish, Is.True);
+        }
+
+        [Test]
         public void Backwards_stage_transition_is_rejected()
         {
             var session = ScanSession.Start(ScanKind.Census, 1, StartedAt);
@@ -83,7 +112,7 @@ namespace CS2AssetPerformanceAuditor.Tests
         public void Unknown_total_uses_indeterminate_progress_without_a_percentage()
         {
             var session = ScanSession.Start(ScanKind.AssetAudit, 1, StartedAt);
-            session.TransitionTo(ScanStage.CapturingCatalog);
+            session.TransitionTo(ScanStage.ResolvingRenderGraph);
             session.ReportProgress(completedItems: null, totalItems: null);
 
             Assert.That(session.Progress.IsIndeterminate, Is.True);
@@ -95,7 +124,7 @@ namespace CS2AssetPerformanceAuditor.Tests
         public void Exact_progress_reports_the_measured_fraction()
         {
             var session = ScanSession.Start(ScanKind.AssetAudit, 1, StartedAt);
-            session.TransitionTo(ScanStage.CapturingCatalog);
+            session.TransitionTo(ScanStage.ResolvingRenderGraph);
             session.ReportProgress(completedItems: 3, totalItems: 4);
 
             Assert.That(session.Progress.IsIndeterminate, Is.False);

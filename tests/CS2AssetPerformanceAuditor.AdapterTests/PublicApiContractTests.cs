@@ -132,6 +132,47 @@ namespace CS2AssetPerformanceAuditor.AdapterTests
             AssertPublicProperties(assetData, "identifier", "uniqueName", "name");
         }
 
+        [Test]
+        public void Census_query_components_are_available_as_public_api()
+        {
+            foreach (var componentType in new[]
+            {
+                "Game.Objects.Object",
+                "Game.Net.Edge",
+                "Game.Prefabs.PrefabRef",
+                "Game.Common.Owner",
+                "Game.Vehicles.Controller",
+                "Game.Tools.Temp",
+                "Game.Common.Deleted",
+                "Game.Common.Overridden"
+            })
+                Assert.That(GameType(componentType).IsPublic, Is.True, componentType);
+
+            Assert.That(GameType("Game.Net.Edge").GetField("m_Start", PublicInstance), Is.Not.Null);
+            Assert.That(GameType("Game.Net.Edge").GetField("m_End", PublicInstance), Is.Not.Null);
+            Assert.That(GameType("Game.Common.Owner").GetField("m_Owner", PublicInstance), Is.Not.Null);
+            Assert.That(GameType("Game.Vehicles.Controller").GetField("m_Controller", PublicInstance), Is.Not.Null);
+        }
+
+        [Test]
+        public void Census_capture_uses_the_supported_async_component_list_api()
+        {
+            var entityQuery = GameType("Unity.Entities.EntityQuery");
+            var method = entityQuery.GetMethods(PublicInstance)
+                .FirstOrDefault(candidate => candidate.Name == "ToComponentDataListAsync"
+                    && candidate.IsGenericMethodDefinition
+                    && candidate.GetGenericArguments().Length == 1
+                    && candidate.GetParameters().Length == 2
+                    && candidate.GetParameters()[1].ParameterType.IsByRef);
+
+            Assert.That(method, Is.Not.Null);
+            Assert.That(method!.ReturnType.GetGenericTypeDefinition().FullName, Is.EqualTo("Unity.Collections.NativeList`1"));
+            var parameters = method.GetParameters();
+            Assert.That(parameters.Length, Is.EqualTo(2));
+            Assert.That(parameters[1].ParameterType.IsByRef, Is.True);
+            Assert.That(parameters[1].ParameterType.GetElementType()?.FullName, Is.EqualTo("Unity.Jobs.JobHandle"));
+        }
+
         private static bool HasGenericMethod(Type type, string name, string parameterType, int genericArity)
         {
             return type.GetMethods(PublicInstance)

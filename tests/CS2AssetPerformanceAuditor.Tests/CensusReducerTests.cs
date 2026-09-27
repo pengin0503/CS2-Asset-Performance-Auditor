@@ -5,6 +5,7 @@ using CS2AssetPerformanceAuditor.Core.Census;
 using CS2AssetPerformanceAuditor.Core.Observations;
 using CS2AssetPerformanceAuditor.Core.Prefabs;
 using CS2AssetPerformanceAuditor.Core.Scanning;
+using CS2AssetPerformanceAuditor.GameIntegration.Census;
 
 namespace CS2AssetPerformanceAuditor.Tests
 {
@@ -101,6 +102,36 @@ namespace CS2AssetPerformanceAuditor.Tests
             published.ResetForWorld(2);
             Assert.That(published.Census, Is.Null);
             Assert.That(published.TryPublishCensus(first, scanSucceeded: true), Is.False);
+        }
+
+        [Test]
+        public void Owner_and_controller_markers_classify_one_subordinate_sample()
+        {
+            var prop = MakeRecord("Prop.Bench", "PropPrefab", PrefabTraits.Prop);
+            var reducer = new CensusReducer(new[] { prop }, 1, 1, CapturedAt, new ScanOptions(true, true));
+            var sample = CensusSample.ForObjectFromMarkers(prop.Key, hasOwnerMarker: true, hasControllerMarker: true);
+
+            sample.AddTo(reducer);
+
+            var snapshot = reducer.BuildSnapshot();
+            Assert.That(snapshot.TryGetEntry(prop.Key, out var entry), Is.True);
+            Assert.That(entry.Counters.TopLevelObjects.Value, Is.EqualTo(0));
+            Assert.That(entry.Counters.SubordinateObjects.Value, Is.EqualTo(1));
+            Assert.That(entry.Counters.LiveObjectReferences.Value, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void Foreign_world_snapshot_cannot_replace_the_current_world_snapshot()
+        {
+            var building = MakeRecord("Building.FireStation", "BuildingPrefab", PrefabTraits.Building);
+            var current = new CensusReducer(new[] { building }, 8, 1, CapturedAt, new ScanOptions(true, true)).BuildSnapshot();
+            var foreign = new CensusReducer(new[] { building }, 9, 2, CapturedAt.AddMinutes(1), new ScanOptions(true, true)).BuildSnapshot();
+            var published = new PublishedAuditState();
+            published.ResetForWorld(8);
+
+            Assert.That(published.TryPublishCensus(current, scanSucceeded: true), Is.True);
+            Assert.That(published.TryPublishCensus(foreign, scanSucceeded: true), Is.False);
+            Assert.That(published.Census, Is.SameAs(current));
         }
 
         private static PrefabRecord MakeRecord(string id, string type, PrefabTraits traits)

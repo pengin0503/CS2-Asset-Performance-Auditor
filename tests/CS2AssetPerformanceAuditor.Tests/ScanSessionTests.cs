@@ -1,5 +1,7 @@
 using System;
 using NUnit.Framework;
+using CS2AssetPerformanceAuditor.Core.Census;
+using CS2AssetPerformanceAuditor.Core.Prefabs;
 using CS2AssetPerformanceAuditor.Core.Scanning;
 
 namespace CS2AssetPerformanceAuditor.Tests
@@ -114,6 +116,25 @@ namespace CS2AssetPerformanceAuditor.Tests
             cancelled.RequestCancellation();
             cancelled.MarkCancelled();
             Assert.That(cancelled.CanPublish, Is.False);
+        }
+
+        [Test]
+        public void Cancelled_same_world_scan_keeps_the_previous_published_snapshot()
+        {
+            var record = new PrefabRecord(new PrefabKey("Building.FireStation", "Building"), "Fire Station",
+                PrefabTraits.Building, new AssetOriginEvidence());
+            var first = new CensusReducer(new[] { record }, 4, 1, StartedAt, new ScanOptions(true, true)).BuildSnapshot();
+            var working = new CensusReducer(new[] { record }, 4, 2, StartedAt.AddMinutes(1), new ScanOptions(true, true)).BuildSnapshot();
+            var published = new PublishedAuditState();
+            published.ResetForWorld(4);
+            Assert.That(published.TryPublishCensus(first, scanSucceeded: true), Is.True);
+
+            var session = ScanSession.Start(ScanKind.Census, 4, StartedAt);
+            session.RequestCancellation();
+            session.MarkCancelled();
+
+            Assert.That(published.TryPublishCensus(working, scanSucceeded: session.State == ScanState.Completed), Is.False);
+            Assert.That(published.Census, Is.SameAs(first));
         }
     }
 }

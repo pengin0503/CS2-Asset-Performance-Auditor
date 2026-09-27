@@ -3,9 +3,12 @@ using System.Collections.Generic;
 using CS2AssetPerformanceAuditor.Core;
 using CS2AssetPerformanceAuditor.Core.Capabilities;
 using Game;
+using Game.Common;
 using Game.Net;
 using Game.Objects;
 using Game.Prefabs;
+using Game.Tools;
+using Game.Vehicles;
 using Unity.Entities;
 using UnityEngine;
 
@@ -21,10 +24,8 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Capabilities
             var capabilities = new List<CapabilityStatus>
             {
                 ProbeIndependently(CapabilityId.PrefabCatalog, () => ProbePrefabCatalog(world)),
-                ProbeIndependently(CapabilityId.ObjectCensus, () => ProbeQuery(world, CapabilityId.ObjectCensus,
-                    ComponentType.ReadOnly<Game.Objects.Object>(), ComponentType.ReadOnly<PrefabRef>())),
-                ProbeIndependently(CapabilityId.NetworkEdgeCensus, () => ProbeQuery(world, CapabilityId.NetworkEdgeCensus,
-                    ComponentType.ReadOnly<Game.Net.Edge>(), ComponentType.ReadOnly<PrefabRef>())),
+                ProbeIndependently(CapabilityId.ObjectCensus, () => ProbeObjectCensus(world)),
+                ProbeIndependently(CapabilityId.NetworkEdgeCensus, () => ProbeNetworkEdgeCensus(world)),
                 new CapabilityStatus(CapabilityId.GeometryMetadata, CapabilityState.Supported, "geometry_api_contract_available"),
                 new CapabilityStatus(CapabilityId.SubmeshMetadata, CapabilityState.Supported, "geometry_api_contract_available"),
                 new CapabilityStatus(CapabilityId.SurfaceMetadata, CapabilityState.Supported, "surface_api_contract_available"),
@@ -47,11 +48,50 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Capabilities
                 : new CapabilityStatus(CapabilityId.PrefabCatalog, CapabilityState.Degraded, "prefab_system_not_present_in_current_world");
         }
 
-        private static CapabilityStatus ProbeQuery(World world, CapabilityId capability, params ComponentType[] required)
+        private static CapabilityStatus ProbeObjectCensus(World world)
         {
-            var query = world.EntityManager.CreateEntityQuery(required);
+            var excluded = new[]
+            {
+                ComponentType.ReadOnly<Temp>(),
+                ComponentType.ReadOnly<Deleted>(),
+                ComponentType.ReadOnly<Overridden>()
+            };
+            var common = new[]
+            {
+                ComponentType.ReadOnly<Game.Objects.Object>(),
+                ComponentType.ReadOnly<PrefabRef>()
+            };
+            ProbeQuery(world, common, null, new[]
+            {
+                excluded[0], excluded[1], excluded[2],
+                ComponentType.ReadOnly<Owner>(), ComponentType.ReadOnly<Controller>()
+            });
+            ProbeQuery(world, common,
+                new[] { ComponentType.ReadOnly<Owner>(), ComponentType.ReadOnly<Controller>() }, excluded);
+            return new CapabilityStatus(CapabilityId.ObjectCensus, CapabilityState.Supported, "object_profile_v1_queries_available");
+        }
+
+        private static CapabilityStatus ProbeNetworkEdgeCensus(World world)
+        {
+            ProbeQuery(world,
+                new[] { ComponentType.ReadOnly<Game.Net.Edge>(), ComponentType.ReadOnly<PrefabRef>() },
+                null,
+                new[]
+                {
+                    ComponentType.ReadOnly<Temp>(),
+                    ComponentType.ReadOnly<Deleted>(),
+                    ComponentType.ReadOnly<Overridden>(),
+                    ComponentType.ReadOnly<Owner>(),
+                    ComponentType.ReadOnly<Controller>()
+                });
+            return new CapabilityStatus(CapabilityId.NetworkEdgeCensus, CapabilityState.Supported, "network_profile_v1_query_available");
+        }
+
+        private static void ProbeQuery(World world, ComponentType[] all, ComponentType[]? any, ComponentType[] none)
+        {
+            var descriptor = new EntityQueryDesc { All = all, Any = any, None = none };
+            var query = world.EntityManager.CreateEntityQuery(new[] { descriptor });
             query.Dispose();
-            return new CapabilityStatus(capability, CapabilityState.Supported, "required_component_query_available");
         }
 
         private static CapabilityStatus ProbeIndependently(CapabilityId capability, Func<CapabilityStatus> probe)

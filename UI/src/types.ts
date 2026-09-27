@@ -43,11 +43,29 @@ export interface UiFinding {
   prefabType?: string | null;
 }
 
+export interface UiMaterialBinding {
+  materialName: string;
+  shaderName: string;
+  shaderKeywords: string[];
+  renderQueue: number;
+  passCount: number;
+  enableInstancing: boolean;
+}
+
+export interface UiDeepInspection {
+  availability: Availability;
+  capturedAt?: string | null;
+  diagnosticCode?: string | null;
+  materials: UiMaterialBinding[];
+  surfaceAssetIds: string[];
+}
+
 export interface UiRenderRelation {
   kind: string;
   from: string;
   to: string;
   lodLevel?: number | null;
+  deepInspection?: UiDeepInspection | null;
 }
 
 export interface AssetRow {
@@ -177,6 +195,7 @@ export interface UiSnapshot {
 export interface AssetAuditorBindings {
   requestCensus(options: UiScanOptions): void;
   requestAssetAudit(options: UiScanOptions): void;
+  requestDeepInspection(renderKey: string): void;
   cancelCensus(): void;
   requestAssetsPage(query: AssetQueryRequest): void;
   requestExport(): void;

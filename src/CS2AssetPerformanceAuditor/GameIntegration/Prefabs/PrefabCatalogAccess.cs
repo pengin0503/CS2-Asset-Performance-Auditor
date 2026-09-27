@@ -15,6 +15,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Prefabs
         private int _capturedEntityCount;
         private int _nextEntityIndex;
         private bool _hasWorkingCapture;
+        private DateTimeOffset _workingCapturedAt;
         private List<PrefabRecord> _workingRecords = new List<PrefabRecord>();
         private Dictionary<PrefabKey, PrefabRecord> _workingByKey = new Dictionary<PrefabKey, PrefabRecord>();
         private Dictionary<Entity, PrefabKey> _workingEntityKeys = new Dictionary<Entity, PrefabKey>();
@@ -38,6 +39,8 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Prefabs
         public int UnresolvedEntityCount { get; private set; }
 
         public long CatalogGeneration { get; private set; }
+
+        public DateTimeOffset CatalogCapturedAt { get; private set; }
 
         public IReadOnlyList<PrefabRecord> PublishedRecords => _publishedRecords;
 
@@ -69,6 +72,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Prefabs
             }
 
             _nextEntityIndex = 0;
+            _workingCapturedAt = DateTimeOffset.UtcNow;
             ProcessedEntityCount = 0;
             UnresolvedEntityCount = 0;
             _workingRecords = new List<PrefabRecord>(_capturedEntities.Length);
@@ -161,6 +165,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Prefabs
             _publishedRecords = Array.AsReadOnly(Array.Empty<PrefabRecord>());
             _publishedEntityKeys = new ReadOnlyDictionary<Entity, PrefabKey>(new Dictionary<Entity, PrefabKey>());
             CatalogGeneration = 0;
+            CatalogCapturedAt = DateTimeOffset.MinValue;
             _capturedEntityCount = 0;
             ProcessedEntityCount = 0;
             UnresolvedEntityCount = 0;
@@ -172,6 +177,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Prefabs
             _publishedEntityKeys = new ReadOnlyDictionary<Entity, PrefabKey>(
                 new Dictionary<Entity, PrefabKey>(_workingEntityKeys));
             CatalogGeneration++;
+            CatalogCapturedAt = _workingCapturedAt;
             _hasWorkingCapture = false;
             _capturedEntities = Array.Empty<Entity>();
             _workingRecords = new List<PrefabRecord>();

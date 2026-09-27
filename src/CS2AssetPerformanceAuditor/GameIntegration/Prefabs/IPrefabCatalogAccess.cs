@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System;
 using CS2AssetPerformanceAuditor.Core.Prefabs;
 using Unity.Entities;
 
@@ -17,6 +18,8 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Prefabs
         int UnresolvedEntityCount { get; }
 
         long CatalogGeneration { get; }
+
+        DateTimeOffset CatalogCapturedAt { get; }
 
         IReadOnlyList<PrefabRecord> PublishedRecords { get; }
 

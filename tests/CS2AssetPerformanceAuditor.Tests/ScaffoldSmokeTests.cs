@@ -68,6 +68,20 @@ public sealed class ScaffoldSmokeTests
     }
 
     [Test]
+    public void Deep_inspection_releases_only_materials_acquired_by_the_mod_and_never_destroys_game_owned_objects()
+    {
+        var source = ReadRepoFile("src/CS2AssetPerformanceAuditor/GameIntegration/Rendering/DeepInspectionReader.cs");
+        Assert.That(source, Does.Contain("var acquired = false"));
+        Assert.That(source, Does.Contain("renderPrefab.ObtainMaterials(false)"));
+        Assert.That(source, Does.Contain("acquired = true"));
+        Assert.That(source, Does.Contain("finally"));
+        Assert.That(source, Does.Contain("if (acquired)"));
+        Assert.That(source, Does.Contain("renderPrefab.ReleaseMaterials()"));
+        Assert.That(source, Does.Not.Contain("Destroy("));
+        Assert.That(source, Does.Not.Contain("UnloadAsset("));
+    }
+
+    [Test]
     public void Census_catalog_publication_is_deferred_until_successful_finalization()
     {
         var catalog = ReadRepoFile("src/CS2AssetPerformanceAuditor/GameIntegration/Prefabs/PrefabCatalogAccess.cs");

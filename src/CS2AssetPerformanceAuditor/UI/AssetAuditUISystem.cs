@@ -42,7 +42,8 @@ namespace CS2AssetPerformanceAuditor.UI
             AddBinding(_snapshotBinding);
             AddBinding(_exportBinding);
             AddBinding(new TriggerBinding<string>(UiBindingContract.Group, UiBindingContract.RequestCensus, HandleRequestCensus, new Colossal.UI.Binding.StringReader()));
-            AddBinding(new TriggerBinding<string>(UiBindingContract.Group, "requestAssetAudit", HandleRequestAssetAudit, new Colossal.UI.Binding.StringReader()));
+            AddBinding(new TriggerBinding<string>(UiBindingContract.Group, UiBindingContract.RequestAssetAudit, HandleRequestAssetAudit, new Colossal.UI.Binding.StringReader()));
+            AddBinding(new TriggerBinding<string>(UiBindingContract.Group, UiBindingContract.RequestDeepInspection, HandleRequestDeepInspection, new Colossal.UI.Binding.StringReader()));
             AddBinding(new TriggerBinding(UiBindingContract.Group, UiBindingContract.CancelCensus, HandleCancelCurrentScan));
             AddBinding(new TriggerBinding<string>(UiBindingContract.Group, UiBindingContract.QueryAssets, HandleQueryAssets, new Colossal.UI.Binding.StringReader()));
             AddBinding(new TriggerBinding(UiBindingContract.Group, UiBindingContract.RequestExport, HandleRequestExport));
@@ -117,6 +118,25 @@ namespace CS2AssetPerformanceAuditor.UI
             }
         }
 
+        private void HandleRequestDeepInspection(string renderKeyText)
+        {
+            try
+            {
+                if (!RenderAssetKey.TryParse(renderKeyText, out var renderKey))
+                    throw new ArgumentException("The render-asset key payload was invalid.", nameof(renderKeyText));
+                var auditSystem = GetAuditSystem();
+                if (auditSystem == null || !auditSystem.RequestDeepInspection(renderKey))
+                    throw new InvalidOperationException("Deep Inspection could not be started for the selected render asset.");
+                InvalidateExport();
+                PublishSnapshot(force: true);
+            }
+            catch
+            {
+                _diagnostics.Add("APA-DEEP-004", "ui_deep_inspection_request_rejected");
+                PublishSnapshot(force: true);
+            }
+        }
+
         private void HandleCancelCurrentScan()
         {
             GetAuditSystem()?.CancelCurrentScan();
@@ -163,20 +183,16 @@ namespace CS2AssetPerformanceAuditor.UI
                 return;
             try
             {
-                var currentAnalysis = auditSystem.PublishedAnalysis != null
-                    && auditSystem.PublishedAnalysis.CatalogGeneration == auditSystem.CatalogGeneration
-                    ? auditSystem.PublishedAnalysis
-                    : null;
-                var report = _reportBuilder.Build(
+                var report = _reportBuilder.BuildCurrent(
                     auditSystem.CatalogRecords,
                     auditSystem.CatalogGeneration,
                     auditSystem.CatalogGeneration > 0 ? auditSystem.CatalogCapturedAt : (DateTimeOffset?)null,
                     auditSystem.PublishedCensus,
+                    auditSystem.PublishedAnalysis,
                     auditSystem.Capabilities,
                     ProjectInfo.ModVersion,
                     DateTimeOffset.UtcNow,
-                    _diagnostics.Snapshot(),
-                    findings: currentAnalysis?.Findings);
+                    _diagnostics.Snapshot());
                 _exportBinding.Update(_reportSerializer.Serialize(report));
             }
             catch
@@ -218,6 +234,7 @@ namespace CS2AssetPerformanceAuditor.UI
                 return;
             var auditSystem = GetAuditSystem();
             var snapshot = _snapshotBuilder.Build(auditSystem, _assetPage, _uiSettings, ProjectInfo.ModVersion);
+            UiAnalysisProjection.ApplyDeepInspections(snapshot, GetCurrentAnalysis(auditSystem));
             snapshot.Diagnostics = CreateDiagnostics(auditSystem);
             var json = UiSnapshotBuilder.Serialize(snapshot);
             var publishInterval = TimeSpan.FromMilliseconds(_uiSettings.ProgressUpdateMs);
@@ -228,6 +245,17 @@ namespace CS2AssetPerformanceAuditor.UI
             _snapshotBinding.Update(json);
             _lastSnapshotJson = json;
             _lastPublishedAt = DateTimeOffset.UtcNow;
+        }
+
+        private static AssetAnalysisSnapshot? GetCurrentAnalysis(AssetAuditSystem? auditSystem)
+        {
+            var analysis = auditSystem?.PublishedAnalysis;
+            if (auditSystem == null || analysis == null)
+                return null;
+            return analysis.WorldGeneration == auditSystem.WorldGeneration
+                && analysis.CatalogGeneration == auditSystem.CatalogGeneration
+                ? analysis
+                : null;
         }
 
         private UiDiagnostics CreateDiagnostics(AssetAuditSystem? auditSystem)

@@ -7,6 +7,7 @@ using CS2AssetPerformanceAuditor.Core.Diagnostics;
 using CS2AssetPerformanceAuditor.Core.Findings;
 using CS2AssetPerformanceAuditor.Core.Observations;
 using CS2AssetPerformanceAuditor.Core.Prefabs;
+using CS2AssetPerformanceAuditor.Core.Rendering;
 
 namespace CS2AssetPerformanceAuditor.Export
 {
@@ -29,6 +30,7 @@ namespace CS2AssetPerformanceAuditor.Export
             DateTimeOffset generatedAt,
             IEnumerable<DiagnosticAggregate>? diagnostics = null,
             IEnumerable<Finding>? findings = null,
+            AssetAnalysisSnapshot? analysis = null,
             ExportScope scope = ExportScope.Full,
             IEnumerable<PrefabKey>? includedKeys = null)
         {
@@ -37,14 +39,17 @@ namespace CS2AssetPerformanceAuditor.Export
             if (string.IsNullOrWhiteSpace(modVersion)) throw new ArgumentException("A mod version is required.", nameof(modVersion));
             if (census != null && census.CatalogGeneration != catalogGeneration)
                 throw new InvalidOperationException("Cannot export a Census snapshot against a different Prefab catalog generation.");
+            if (analysis != null && analysis.CatalogGeneration != catalogGeneration)
+                throw new InvalidOperationException("Cannot export an Asset Analysis snapshot against a different Prefab catalog generation.");
             if (!Enum.IsDefined(typeof(ExportScope), scope)) throw new ArgumentOutOfRangeException(nameof(scope));
 
             var records = catalog.ToArray();
-            var allFindings = (findings ?? Array.Empty<Finding>()).ToArray();
+            var allFindings = (findings ?? analysis?.Findings ?? Array.Empty<Finding>()).ToArray();
             var keySet = includedKeys == null ? null : new HashSet<PrefabKey>(includedKeys);
             var scopedRecords = ScopeRecords(records, scope, keySet);
             var scopedCensus = ScopeCensus(census?.Entries ?? Array.Empty<CensusEntry>(), scope, keySet);
             var scopedFindings = ScopeFindings(allFindings, scope, keySet);
+            var scopedAnalysis = ScopeAnalysis(analysis, scope, keySet);
 
             return new AuditReport
             {
@@ -64,7 +69,7 @@ namespace CS2AssetPerformanceAuditor.Export
                 CensusCapturedAt = census == null ? null : FormatTime(census.CapturedAt),
                 CatalogGeneration = catalogGeneration,
                 CensusCatalogGeneration = census?.CatalogGeneration,
-                WorldGeneration = census?.WorldGeneration,
+                WorldGeneration = census?.WorldGeneration ?? analysis?.WorldGeneration,
                 CapabilityReport = new ReportCapabilityReport
                 {
                     Compatibility = capabilities.Compatibility.ToString(),
@@ -88,7 +93,9 @@ namespace CS2AssetPerformanceAuditor.Export
                     Findings = scopedFindings
                         .OrderBy(finding => finding.RuleId, StringComparer.Ordinal)
                         .ThenBy(finding => finding.Title, StringComparer.Ordinal)
-                        .Select(MapFinding).ToArray()
+                        .Select(MapFinding).ToArray(),
+                    Assets = scopedAnalysis.Prefabs.Select(MapAssetAnalysis).ToArray(),
+                    RenderAssets = scopedAnalysis.RenderAssets.Select(MapRenderAssetAnalysis).ToArray()
                 }
             };
         }
@@ -118,9 +125,28 @@ namespace CS2AssetPerformanceAuditor.Export
             return findings.Where(finding => finding.Evidence.Any(evidence => evidence.StartsWith("asset=", StringComparison.Ordinal) && ids.Contains(evidence.Substring("asset=".Length))));
         }
 
+        private static ScopedAnalysis ScopeAnalysis(AssetAnalysisSnapshot? analysis, ExportScope scope, HashSet<PrefabKey>? keys)
+        {
+            if (analysis == null || scope == ExportScope.Census || scope == ExportScope.Findings)
+                return ScopedAnalysis.Empty;
+
+            IEnumerable<PrefabAnalysisEntry> prefabs = analysis.Prefabs;
+            if (scope == ExportScope.Filtered || scope == ExportScope.Selected)
+                prefabs = keys == null ? Array.Empty<PrefabAnalysisEntry>() : prefabs.Where(entry => keys.Contains(entry.Key));
+            var prefabArray = prefabs.ToArray();
+            var referencedRenderKeys = new HashSet<RenderAssetKey>(prefabArray.SelectMany(entry => entry.Relations).Select(relation => relation.RenderAssetKey));
+            var renderAssets = (scope == ExportScope.Full
+                    ? analysis.RenderAssets
+                    : analysis.RenderAssets.Where(record => referencedRenderKeys.Contains(record.RenderAsset.Key)))
+                .ToArray();
+            return new ScopedAnalysis(prefabArray, renderAssets);
+        }
+
         private ReportCapability MapCapability(CapabilityStatus status) => new ReportCapability
         {
-            Id = status.Id.ToString(), State = status.State.ToString(), Detail = status.Detail == null ? null : _sanitizer.SanitizeText(status.Detail)
+            Id = status.Id.ToString(),
+            State = status.State.ToString(),
+            Detail = status.Detail == null ? null : _sanitizer.SanitizeText(status.Detail)
         };
 
         private ReportPrefab MapPrefab(PrefabRecord record)
@@ -160,6 +186,119 @@ namespace CS2AssetPerformanceAuditor.Export
             };
         }
 
+        private ReportAssetAnalysis MapAssetAnalysis(PrefabAnalysisEntry entry) => new ReportAssetAnalysis
+        {
+            PrefabId = _sanitizer.SanitizeText(entry.Key.PrefabId),
+            PrefabType = _sanitizer.SanitizeText(entry.Key.PrefabType),
+            RenderCoverage = entry.RenderCoverage.ToString(),
+            Lod0Vertices = MapObservation(entry.Lod0Vertices),
+            Lod1RetentionPercent = MapObservation(entry.Lod1RetentionPercent),
+            MaterialCount = MapObservation(entry.MaterialCount),
+            UniqueTextureCount = MapObservation(entry.UniqueTextureCount),
+            EstimatedTexturePayload = MapObservation(entry.EstimatedTexturePayload),
+            RenderRelations = entry.Relations.Select(relation => new ReportRenderRelation
+            {
+                Kind = relation.RelationKind.ToString(),
+                RenderAssetId = _sanitizer.SanitizeText(relation.RenderAssetKey.RenderAssetId),
+                RenderAssetType = _sanitizer.SanitizeText(relation.RenderAssetKey.RenderAssetType),
+                LodLevel = relation.LodLevel
+            }).ToArray()
+        };
+
+        private ReportRenderAssetAnalysis MapRenderAssetAnalysis(RenderAssetAnalysisRecord record) => new ReportRenderAssetAnalysis
+        {
+            RenderAssetId = _sanitizer.SanitizeText(record.RenderAsset.Key.RenderAssetId),
+            RenderAssetType = _sanitizer.SanitizeText(record.RenderAsset.Key.RenderAssetType),
+            DisplayName = _sanitizer.SanitizeText(record.RenderAsset.DisplayName),
+            Geometry = record.Geometry == null ? null : MapGeometry(record.Geometry),
+            Surfaces = record.Surfaces.Select(MapSurface).ToArray(),
+            Textures = record.Textures.Select(MapTexture).ToArray(),
+            DeepInspection = record.RenderAsset.DeepInspection == null ? null : MapDeepInspection(record.RenderAsset.DeepInspection)
+        };
+
+        private ReportGeometry MapGeometry(GeometryObservation geometry) => new ReportGeometry
+        {
+            GeometryAssetId = _sanitizer.SanitizeText(geometry.GeometryAssetId),
+            MeshCount = MapObservation(geometry.MeshCount),
+            TotalVertexCount = MapObservation(geometry.TotalVertexCount),
+            TotalIndexCount = MapObservation(geometry.TotalIndexCount),
+            SubMeshCount = MapObservation(geometry.SubMeshCount),
+            CompressedDataSize = MapObservation(geometry.CompressedDataSize),
+            Meshes = geometry.Meshes.Select(mesh => new ReportMesh
+            {
+                MeshIndex = mesh.MeshIndex,
+                VertexCount = MapObservation(mesh.VertexCount),
+                IndexCount = MapObservation(mesh.IndexCount),
+                IndexFormat = MapObservation(mesh.IndexFormat),
+                SubMeshes = mesh.SubMeshes.Select(MapSubMesh).ToArray()
+            }).ToArray()
+        };
+
+        private ReportSubMesh MapSubMesh(SubMeshObservation subMesh) => new ReportSubMesh
+        {
+            MeshIndex = subMesh.MeshIndex,
+            SubMeshIndex = subMesh.SubMeshIndex,
+            Topology = _sanitizer.SanitizeText(subMesh.Topology),
+            IndexCount = MapObservation(subMesh.IndexCount),
+            VertexCount = MapObservation(subMesh.VertexCount),
+            TriangleCount = MapObservation(subMesh.TriangleCount),
+            Bounds = subMesh.Bounds.HasValue ? new ReportBounds
+            {
+                CenterX = subMesh.Bounds.CenterX,
+                CenterY = subMesh.Bounds.CenterY,
+                CenterZ = subMesh.Bounds.CenterZ,
+                ExtentsX = subMesh.Bounds.ExtentsX,
+                ExtentsY = subMesh.Bounds.ExtentsY,
+                ExtentsZ = subMesh.Bounds.ExtentsZ
+            } : null
+        };
+
+        private ReportSurface MapSurface(SurfaceObservation surface) => new ReportSurface
+        {
+            SurfaceAssetId = _sanitizer.SanitizeText(surface.SurfaceAssetId),
+            MaterialTemplateHash = MapObservation(surface.MaterialTemplateHash),
+            IsVirtualTexturingMaterial = MapObservation(surface.IsVirtualTexturingMaterial),
+            IsCurrentlyUsingVirtualTexturing = MapObservation(surface.IsCurrentlyUsingVirtualTexturing),
+            FloatPropertyCount = surface.FloatPropertyCount,
+            IntPropertyCount = surface.IntPropertyCount,
+            VectorPropertyCount = surface.VectorPropertyCount,
+            ColorPropertyCount = surface.ColorPropertyCount,
+            Keywords = surface.Keywords.Select(_sanitizer.SanitizeText).ToArray(),
+            TextureAssetIds = surface.TextureAssetIds.Select(_sanitizer.SanitizeText).ToArray()
+        };
+
+        private ReportTexture MapTexture(TextureObservation texture) => new ReportTexture
+        {
+            TextureAssetId = _sanitizer.SanitizeText(texture.TextureAssetId),
+            Width = MapObservation(texture.Width),
+            Height = MapObservation(texture.Height),
+            Depth = MapObservation(texture.Depth),
+            Format = MapObservation(texture.Format),
+            Dimension = MapObservation(texture.Dimension),
+            MipsCount = MapObservation(texture.MipsCount),
+            FilterMode = MapObservation(texture.FilterMode),
+            WrapMode = MapObservation(texture.WrapMode),
+            AnisoLevel = MapObservation(texture.AnisoLevel),
+            EstimatedLogicalPayload = MapObservation(texture.EstimatedLogicalPayload)
+        };
+
+        private ReportDeepInspection MapDeepInspection(DeepInspectionObservation inspection) => new ReportDeepInspection
+        {
+            Availability = inspection.Availability.ToString(),
+            CapturedAt = FormatTime(inspection.CapturedAt),
+            DiagnosticCode = inspection.DiagnosticCode == null ? null : _sanitizer.SanitizeText(inspection.DiagnosticCode),
+            SurfaceAssetIds = inspection.SurfaceAssetIds.Select(_sanitizer.SanitizeText).ToArray(),
+            Materials = inspection.Materials.Select(material => new ReportMaterialBinding
+            {
+                MaterialName = _sanitizer.SanitizeText(material.MaterialName),
+                ShaderName = _sanitizer.SanitizeText(material.ShaderName),
+                ShaderKeywords = material.ShaderKeywords.Select(_sanitizer.SanitizeText).ToArray(),
+                RenderQueue = material.RenderQueue,
+                PassCount = material.PassCount,
+                EnableInstancing = material.EnableInstancing
+            }).ToArray()
+        };
+
         private ReportFinding MapFinding(Finding finding) => new ReportFinding
         {
             RuleId = _sanitizer.SanitizeText(finding.RuleId),
@@ -172,13 +311,46 @@ namespace CS2AssetPerformanceAuditor.Export
             RuleVersion = _sanitizer.SanitizeText(finding.RuleVersion)
         };
 
-        private ReportObservation MapObservation(Observation<long> observation) => new ReportObservation
+        private ReportObservation MapObservation(Observation<long> observation) => MapLongObservation(
+            observation.Availability, observation.Origin, observation.CapturedAt, observation.HasValue ? observation.Value : (long?)null, observation.DiagnosticCode);
+
+        private ReportObservation MapObservation(Observation<int> observation) => MapLongObservation(
+            observation.Availability, observation.Origin, observation.CapturedAt, observation.HasValue ? observation.Value : (long?)null, observation.DiagnosticCode);
+
+        private ReportDoubleObservation MapObservation(Observation<double> observation) => new ReportDoubleObservation
         {
             Availability = observation.Availability.ToString(),
             Origin = observation.Origin.ToString(),
             CapturedAt = FormatTime(observation.CapturedAt),
-            Value = observation.HasValue ? observation.Value : (long?)null,
+            Value = observation.HasValue ? observation.Value : (double?)null,
             DiagnosticCode = observation.DiagnosticCode == null ? null : _sanitizer.SanitizeText(observation.DiagnosticCode)
+        };
+
+        private ReportStringObservation MapObservation(Observation<string> observation) => new ReportStringObservation
+        {
+            Availability = observation.Availability.ToString(),
+            Origin = observation.Origin.ToString(),
+            CapturedAt = FormatTime(observation.CapturedAt),
+            Value = observation.HasValue ? _sanitizer.SanitizeText(observation.Value) : null,
+            DiagnosticCode = observation.DiagnosticCode == null ? null : _sanitizer.SanitizeText(observation.DiagnosticCode)
+        };
+
+        private ReportBooleanObservation MapObservation(Observation<bool> observation) => new ReportBooleanObservation
+        {
+            Availability = observation.Availability.ToString(),
+            Origin = observation.Origin.ToString(),
+            CapturedAt = FormatTime(observation.CapturedAt),
+            Value = observation.HasValue ? observation.Value : (bool?)null,
+            DiagnosticCode = observation.DiagnosticCode == null ? null : _sanitizer.SanitizeText(observation.DiagnosticCode)
+        };
+
+        private ReportObservation MapLongObservation(Availability availability, ObservationOrigin origin, DateTimeOffset capturedAt, long? value, string? diagnosticCode) => new ReportObservation
+        {
+            Availability = availability.ToString(),
+            Origin = origin.ToString(),
+            CapturedAt = FormatTime(capturedAt),
+            Value = value,
+            DiagnosticCode = diagnosticCode == null ? null : _sanitizer.SanitizeText(diagnosticCode)
         };
 
         private ReportDiagnostic MapDiagnostic(DiagnosticAggregate diagnostic) => new ReportDiagnostic
@@ -192,5 +364,17 @@ namespace CS2AssetPerformanceAuditor.Export
 
         private string[]? SanitizeIdentifiers(IReadOnlyList<string>? identifiers) => identifiers?.Select(_sanitizer.SanitizeText).ToArray();
         private static string FormatTime(DateTimeOffset value) => value.ToUniversalTime().ToString("O");
+
+        private sealed class ScopedAnalysis
+        {
+            public static ScopedAnalysis Empty { get; } = new ScopedAnalysis(Array.Empty<PrefabAnalysisEntry>(), Array.Empty<RenderAssetAnalysisRecord>());
+            public ScopedAnalysis(PrefabAnalysisEntry[] prefabs, RenderAssetAnalysisRecord[] renderAssets)
+            {
+                Prefabs = prefabs;
+                RenderAssets = renderAssets;
+            }
+            public PrefabAnalysisEntry[] Prefabs { get; }
+            public RenderAssetAnalysisRecord[] RenderAssets { get; }
+        }
     }
 }

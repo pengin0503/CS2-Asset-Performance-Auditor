@@ -21,5 +21,6 @@
     <Compile Include="../../src/CS2AssetPerformanceAuditor/UI/UiContracts.cs" Link="UI/UiContracts.cs" />
     <Compile Include="../../src/CS2AssetPerformanceAuditor/UI/UiAnalysisProjection.cs" Link="UI/UiAnalysisProjection.cs" />
     <Compile Include="../../src/CS2AssetPerformanceAuditor/UI/UiExportContracts.cs" Link="UI/UiExportContracts.cs" />
+    <Compile Include="../../src/CS2AssetPerformanceAuditor/UI/UiPublishPolicy.cs" Link="UI/UiPublishPolicy.cs" />
   </ItemGroup>
 </Project>

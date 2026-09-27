@@ -19,6 +19,10 @@ jobs:
           dotnet-version: '8.0.x'
       - name: Run Pure Core tests
         run: dotnet test tests/CS2AssetPerformanceAuditor.Tests/CS2AssetPerformanceAuditor.Tests.csproj --configuration Release
+      # The adapter contract tests need the game's managed assemblies to run, which CI does not have.
+      # Building them still catches compile breaks before they reach a machine with the game installed.
+      - name: Build adapter contract tests
+        run: dotnet build tests/CS2AssetPerformanceAuditor.AdapterTests/CS2AssetPerformanceAuditor.AdapterTests.csproj --configuration Release
 
   ui-tests:
     runs-on: ubuntu-latest

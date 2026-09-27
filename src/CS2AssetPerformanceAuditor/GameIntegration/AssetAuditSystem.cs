@@ -32,6 +32,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
         private AssetAnalysisCollector? _analysisCollector;
         private RenderGraphSnapshot? _publishedRuntimeRenderGraph;
         private ScanTelemetry? _scanTelemetry;
+        private ScanTelemetrySnapshot? _finalTelemetry;
         private bool _catalogScanRequested;
         private bool _catalogCaptureActive;
         private bool _censusScanRequested;
@@ -66,7 +67,8 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
         public RenderGraphSnapshot? PublishedRuntimeRenderGraph => _publishedRuntimeRenderGraph;
         public string? LastDiagnosticCode { get; private set; }
         public int UnmatchedPrefabReferenceCount => _censusAccess?.UnmatchedPrefabReferenceCount ?? 0;
-        public ScanTelemetrySnapshot? TelemetrySnapshot => _scanTelemetry?.Snapshot(DateTimeOffset.UtcNow);
+        // While a scan runs, elapsed time is live; once it ends the snapshot is frozen at the frame the scan ended.
+        public ScanTelemetrySnapshot? TelemetrySnapshot => _finalTelemetry ?? _scanTelemetry?.Snapshot(DateTimeOffset.UtcNow);
 
         public void RequestCatalogScan()
         {
@@ -130,6 +132,12 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
         }
 
         protected override void OnUpdate()
+        {
+            UpdateScans();
+            FreezeTelemetryAfterScanEnds();
+        }
+
+        private void UpdateScans()
         {
             if (_censusCleanupRequested)
             {
@@ -209,7 +217,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
             _censusScanRequested = false;
             LastDiagnosticCode = null;
             var startedAt = DateTimeOffset.UtcNow;
-            _scanTelemetry = new ScanTelemetry(startedAt);
+            StartTelemetry(startedAt);
             CurrentScan = ScanSession.Start(ScanKind.Census, WorldGeneration, startedAt);
             CurrentScan.TransitionTo(ScanStage.CapturingCatalog);
             _catalogScanRequested = true;
@@ -220,7 +228,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
             _assetAuditRequested = false;
             LastDiagnosticCode = null;
             var startedAt = DateTimeOffset.UtcNow;
-            _scanTelemetry = new ScanTelemetry(startedAt);
+            StartTelemetry(startedAt);
             CurrentScan = ScanSession.Start(ScanKind.AssetAudit, WorldGeneration, startedAt);
 
             if (_assetAuditRefreshCatalog || CatalogGeneration == 0)
@@ -253,7 +261,7 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
 
             LastDiagnosticCode = null;
             var startedAt = DateTimeOffset.UtcNow;
-            _scanTelemetry = new ScanTelemetry(startedAt);
+            StartTelemetry(startedAt);
             CurrentScan = ScanSession.Start(ScanKind.DeepInspection, WorldGeneration, startedAt);
             _activeDeepInspectionKey = _requestedDeepInspectionKey;
             _requestedDeepInspectionKey = default;
@@ -712,6 +720,18 @@ namespace CS2AssetPerformanceAuditor.GameIntegration
             _networkCaptureStarted = false;
             if (CurrentScan?.State == ScanState.CancellationRequested)
                 CurrentScan.MarkCancelled();
+        }
+
+        private void StartTelemetry(DateTimeOffset startedAt)
+        {
+            _scanTelemetry = new ScanTelemetry(startedAt);
+            _finalTelemetry = null;
+        }
+
+        private void FreezeTelemetryAfterScanEnds()
+        {
+            if (_scanTelemetry != null && _finalTelemetry == null && CurrentScan != null && !IsScanActive)
+                _finalTelemetry = _scanTelemetry.Snapshot(DateTimeOffset.UtcNow);
         }
 
         private void RecordManagedSlice(TimeSpan elapsed, long processedItems)

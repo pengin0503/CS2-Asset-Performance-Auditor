@@ -16,5 +16,7 @@
     <Compile Include="../../src/CS2AssetPerformanceAuditor/GameIntegration/Prefabs/PrefabClassifier.cs" Link="GameIntegration/PrefabClassifier.cs" />
     <Compile Include="../../src/CS2AssetPerformanceAuditor/GameIntegration/Prefabs/SourceMetadataReader.cs" Link="GameIntegration/SourceMetadataReader.cs" />
     <Compile Include="../../src/CS2AssetPerformanceAuditor/GameIntegration/Census/CensusSample.cs" Link="GameIntegration/CensusSample.cs" />
+    <Compile Include="../../src/CS2AssetPerformanceAuditor/GameIntegration/Rendering/IRenderAssetResolver.cs" Link="GameIntegration/Rendering/IRenderAssetResolver.cs" />
+    <Compile Include="../../src/CS2AssetPerformanceAuditor/GameIntegration/Rendering/RenderGraphBuilder.cs" Link="GameIntegration/Rendering/RenderGraphBuilder.cs" />
   </ItemGroup>
 </Project>

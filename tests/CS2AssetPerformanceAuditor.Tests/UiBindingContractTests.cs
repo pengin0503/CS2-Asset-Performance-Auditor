@@ -23,5 +23,18 @@ namespace CS2AssetPerformanceAuditor.Tests
             Assert.That(parsed, Is.EqualTo(key));
             Assert.That(RenderAssetKey.TryParse("invalid", out _), Is.False);
         }
+
+        [Test]
+        public void Export_request_defaults_to_full_json_and_carries_stable_selected_keys()
+        {
+            var request = new UiExportRequest();
+            Assert.That(request.Format, Is.EqualTo("Json"));
+            Assert.That(request.Scope, Is.EqualTo("Full"));
+            Assert.That(request.SelectedKeys, Is.Empty);
+
+            request.SelectedKeys = new[] { new UiPrefabKey { PrefabId = "House:A", PrefabType = "Building" } };
+            Assert.That(request.SelectedKeys[0].PrefabId, Is.EqualTo("House:A"));
+            Assert.That(request.SelectedKeys[0].PrefabType, Is.EqualTo("Building"));
+        }
     }
 }

@@ -15,6 +15,14 @@ describe("panel close behavior", () => {
     expect(append).toHaveBeenCalledWith("GameTopLeft", expect.any(Function));
   });
 
+  it("renders an icon launcher with an accessible label", () => {
+    const html = renderToStaticMarkup(<AssetAuditorRoot />);
+
+    expect(html).toContain('aria-label="Open Asset Performance Auditor"');
+    expect(html).toContain('class="apa__launcher-icon"');
+    expect(html).not.toContain(">Asset Auditor</button>");
+  });
+
   it("Escape closes the panel without invoking scan cancellation", () => {
     const closePanel = vi.fn();
     const cancelScan = vi.fn();

@@ -79,7 +79,7 @@ namespace CS2AssetPerformanceAuditor.Core.Query
 
         private static bool MatchesSearch(PrefabRecord record, string? searchText)
         {
-            if (string.IsNullOrEmpty(searchText)) return true;
+            if (searchText == null || searchText.Length == 0) return true;
             var comparison = StringComparison.OrdinalIgnoreCase;
             var evidence = record.OriginEvidence;
             return record.DisplayName.IndexOf(searchText, comparison) >= 0

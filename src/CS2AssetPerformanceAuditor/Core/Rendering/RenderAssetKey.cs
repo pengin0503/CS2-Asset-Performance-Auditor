@@ -26,7 +26,7 @@ namespace CS2AssetPerformanceAuditor.Core.Rendering
         public static bool TryParse(string? value, out RenderAssetKey key)
         {
             key = default;
-            if (string.IsNullOrWhiteSpace(value)) return false;
+            if (value == null || string.IsNullOrWhiteSpace(value)) return false;
             var separator = value.IndexOf(':');
             if (separator <= 0 || separator >= value.Length - 1) return false;
             var type = value.Substring(0, separator);

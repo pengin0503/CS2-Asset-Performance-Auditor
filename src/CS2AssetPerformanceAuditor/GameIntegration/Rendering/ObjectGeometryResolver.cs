@@ -80,7 +80,8 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Rendering
         private static string DisplayName(RenderPrefab renderPrefab, string fallback)
         {
             if (!string.IsNullOrWhiteSpace(renderPrefab.name)) return renderPrefab.name;
-            if (!string.IsNullOrWhiteSpace(renderPrefab.asset?.name)) return renderPrefab.asset.name;
+            var assetName = renderPrefab.asset?.name;
+            if (assetName != null && !string.IsNullOrWhiteSpace(assetName)) return assetName;
             return fallback;
         }
     }

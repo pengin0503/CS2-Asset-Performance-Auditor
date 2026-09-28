@@ -319,8 +319,9 @@ namespace CS2AssetPerformanceAuditor.GameIntegration.Prefabs
         {
             if (!string.IsNullOrWhiteSpace(prefab.name))
                 return prefab.name;
-            if (!string.IsNullOrWhiteSpace(prefab.asset?.name))
-                return prefab.asset.name;
+            var assetName = prefab.asset?.name;
+            if (assetName != null && !string.IsNullOrWhiteSpace(assetName))
+                return assetName;
             return prefabId;
         }
     }

@@ -1,6 +1,8 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using NUnit.Framework;
 
 namespace CS2AssetPerformanceAuditor.Tests;
@@ -30,10 +32,21 @@ public sealed class ScaffoldSmokeTests
     [Test]
     public void CS2_systems_are_partial_for_entities_source_generation()
     {
-        var auditSystem = ReadRepoFile("src/CS2AssetPerformanceAuditor/GameIntegration/AssetAuditSystem.cs");
-        var uiSystem = ReadRepoFile("src/CS2AssetPerformanceAuditor/UI/AssetAuditUISystem.cs");
-        Assert.That(auditSystem, Does.Contain("public sealed partial class AssetAuditSystem : GameSystemBase"));
-        Assert.That(uiSystem, Does.Contain("public sealed partial class AssetAuditUISystem : UISystemBase"));
+        // The Unity Entities source generator (only present in the CS2 toolchain build, not in CI) fails with
+        // EA0007 for any SystemBase-derived class that is not partial. Check every system class in the mod, not a
+        // fixed list, so a newly added system is covered too.
+        var systemDeclaration = new Regex(@"\bclass\s+(\w+)\s*:\s*(?:GameSystemBase|UISystemBase|SystemBase|ComponentSystemBase)\b");
+        var sourceRoot = Path.Combine(FindRepoRoot(), "src", "CS2AssetPerformanceAuditor");
+        var systems = Directory.GetFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !path.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar))
+            .SelectMany(path => File.ReadAllLines(path).Select(line => (path, line)))
+            .Where(item => systemDeclaration.IsMatch(item.line))
+            .ToArray();
+
+        Assert.That(systems.Select(item => systemDeclaration.Match(item.line).Groups[1].Value),
+            Is.SupersetOf(new[] { "AssetAuditSystem", "AssetAuditUISystem" }));
+        foreach (var (path, line) in systems)
+            Assert.That(Regex.IsMatch(line, @"\bpartial\s+class\b"), Is.True, $"{Path.GetFileName(path)}: {line.Trim()} must be partial.");
     }
 
     [Test]
@@ -113,15 +126,18 @@ public sealed class ScaffoldSmokeTests
 
     private static string ReadRepoFile(string relativePath)
     {
+        var path = Path.Combine(FindRepoRoot(), relativePath.Replace('/', Path.DirectorySeparatorChar));
+        Assert.That(File.Exists(path), Is.True, $"Expected repository file was not found: {relativePath}");
+        return File.ReadAllText(path);
+    }
+
+    private static string FindRepoRoot()
+    {
         var directory = new DirectoryInfo(TestContext.CurrentContext.TestDirectory);
         while (directory != null)
         {
             if (File.Exists(Path.Combine(directory.FullName, "CS2AssetPerformanceAuditor.sln")))
-            {
-                var path = Path.Combine(directory.FullName, relativePath.Replace('/', Path.DirectorySeparatorChar));
-                Assert.That(File.Exists(path), Is.True, $"Expected repository file was not found: {relativePath}");
-                return File.ReadAllText(path);
-            }
+                return directory.FullName;
             directory = directory.Parent;
         }
         Assert.Fail("Could not locate the repository root from the NUnit test directory.");

@@ -86,7 +86,19 @@ export function AssetAuditorRoot({
     <main className="asset-auditor" aria-label="CS2 Asset Performance Auditor" style={{ fontSize: `${settings.uiScale}em` }}>
       <h1 className="apa__sr-only">CS2 Asset Performance Auditor</h1>
       {!open ? (
-        <button type="button" className="apa__launcher" onClick={() => setOpen(true)}>Asset Auditor</button>
+        <button
+          type="button"
+          className="apa__launcher"
+          aria-label="Open Asset Performance Auditor"
+          title="Asset Performance Auditor"
+          onClick={() => setOpen(true)}
+        >
+          <svg className="apa__launcher-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 18V11M9 18V7M14 18v-3" />
+            <circle cx="16.5" cy="9.5" r="3.5" />
+            <path d="m19 12 3 3" />
+          </svg>
+        </button>
       ) : (
         <section className="apa__panel" role="dialog" aria-label="CS2 Asset Performance Auditor">
           <header className="apa__panel-header">
